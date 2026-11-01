@@ -1,0 +1,100 @@
+            <div className="ml-1 flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-bold">
+              R
+            </div>
+          </div>
+        </header>
+
+        <div className="p-5 lg:p-8">
+          {active === 'Dashboard' && (
+            <>
+              <section className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Good morning, Rene 👋🏻
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Here’s what’s happening across your social platforms.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setComposerOpen(true)}
+                  className="flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold shadow-sm"
+                >
+                  <Send size={16} />
+                  Quick publish
+                </button>
+              </section>
+
+              <section className="mb-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <Sparkles size={14} /> Social Command
+                    </div>
+                    <h3 className="mt-2 text-xl font-bold">Tell your hub what to do</h3>
+                    <p className="mt-1 text-sm text-slate-300">Try: Plan my VA tip for Facebook, Instagram and Threads.</p>
+                  </div>
+                  <button onClick={() => setActive('Social Command')} className="flex w-fit items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900">
+                    Open command
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </section>
+
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ['Total followers', totalFollowers, '+8.4%', TrendingUp],
+                  ['Reach this month', '18.6K', '+12.7%', TrendingUp],
+                  ['Engagement', '6.8%', '+1.2%', TrendingUp],
+                  ['Scheduled posts', '12', '3 this week', CalendarDays],
+                ].map(([label, value, change, Icon]) => (
+                  <div
+                    key={label as string}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">
+                        {label as string}
+                      </span>
+                      <div className="rounded-xl bg-slate-100 p-2">
+                        <Icon size={17} />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-end gap-2">
+                      <span className="text-2xl font-bold">
+                        {value as string}
+                      </span>
+                      <span className="mb-1 text-xs font-semibold text-emerald-600">
+                        {change as string}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <section className="mt-6 grid gap-6 xl:grid-cols-[1.55fr_1fr]">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold">Your platforms</h3>
+                      <p className="text-xs text-slate-400">
+                        A quick view of your connected channels
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActive('Connected Accounts')}
+                      className="text-xs font-semibold text-slate-600 hover:underline"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {platforms.map(({ name, icon: Icon, followers }) => (
+                      <div
+                        key={name}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-slate-100 p-2.5">
+                            <Icon size={18} />
+                          </div>
