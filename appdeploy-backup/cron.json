@@ -1,0 +1,8 @@
+[
+  {
+    "name": "publish-scheduled-posts",
+    "cron": "*/5 * * * *",
+    "handler": "publishScheduledPostsCron",
+    "timezone": "Africa/Johannesburg"
+  }
+]
