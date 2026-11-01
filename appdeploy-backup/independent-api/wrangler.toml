@@ -1,0 +1,6 @@
+name = "rene-social-hub-api-test"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Prototype only. No secrets, social tokens, or database bindings configured.
+# Do not deploy this as a live publishing API yet.
