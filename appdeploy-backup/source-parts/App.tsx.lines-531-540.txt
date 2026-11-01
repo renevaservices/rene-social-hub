@@ -1,0 +1,10 @@
+                        <div
+                          className="w-full rounded-t-lg bg-slate-900"
+                          style={{ height: `${height}%` }}
+                        ></div>
+                        <span className="text-[10px] text-slate-400">
+                          {['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
