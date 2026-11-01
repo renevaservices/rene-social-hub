@@ -1,0 +1,10 @@
+                      </p>
+                    </div>
+                    <BarChart3 size={18} className="text-slate-400" />
+                  </div>
+                  <div className="flex h-36 items-end justify-between gap-2">
+                    {[38, 58, 42, 76, 55, 88, 68].map((height, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-2"
+                      >
