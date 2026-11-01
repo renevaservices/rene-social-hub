@@ -1,0 +1,100 @@
+                  setEditingClient(null);
+                  setClientForm({ businessName: '', contactName: '', email: '', phone: '', notes: '', status: 'Active' });
+                } catch (err) { showToast((err as { message?: string })?.message || 'Could not save this client.'); }
+              }}
+              onEdit={client => { setEditingClient(client.id); setClientForm({ businessName: client.businessName, contactName: client.contactName || '', email: client.email || '', phone: client.phone || '', notes: client.notes || '', status: client.status || 'Active' }); setClientFormOpen(true); }}
+              onDelete={async id => {
+                if (!window.confirm('Delete this client record? This will not delete any social media account.')) return;
+                try { await api.delete(`/api/clients/${id}`); setClients(current => current.filter(client => client.id !== id)); showToast('Client record deleted.'); }
+                catch (err) { showToast((err as { message?: string })?.message || 'Could not delete this client.'); }
+              }}
+            />
+          )}
+          {active === 'Social Command' && (
+            <SocialCommand
+              commandText={commandText}
+              setCommandText={setCommandText}
+              result={commandResult}
+              onRun={() => {
+                if (!commandText.trim()) {
+                  setCommandResult('Tell me what you want to schedule first.');
+                  return;
+                }
+                setCommandResult('Plan created: I would prepare platform-specific versions, add the selected channels to your planner, and leave publishing ready for account authorization.');
+              }}
+              onUsePlanner={() => setActive('Content Planner')}
+            />
+          )}
+          {active === 'Connected Accounts' && (
+            <ConnectedAccounts authUser={authUser} connectionState={connectionState} onConnect={handleConnect} />
+          )}
+          {active === 'Content Planner' && (
+            <Planner posts={scheduledPosts} onCreate={() => setComposerOpen(true)} onRefresh={async () => {
+              try {
+                const response = await api.get('/api/scheduled-posts');
+                setScheduledPosts(response.data?.posts || []);
+                showToast('Planner refreshed.');
+              } catch (err) {
+                showToast((err as { message?: string })?.message || 'Could not refresh the planner.');
+              }
+            }} onCancel={async id => {
+              try { await api.delete(`/api/scheduled-posts/${id}`); setScheduledPosts(current => current.map(post => post.id === id ? { ...post, status: 'Cancelled' } : post)); showToast('Scheduled post cancelled.'); }
+              catch (err) { showToast((err as { message?: string })?.message || 'Could not cancel this post.'); }
+            }} />
+          )}
+          {active === 'Create Post' && (
+            <Composer
+              caption={caption}
+              setCaption={setCaption}
+              selectedPlatforms={selectedPlatforms}
+              togglePlatform={togglePlatform}
+              onClose={() => setActive('Dashboard')}
+              onPublish={() => {
+                if (!caption.trim()) { showToast('Write your post first.'); return; }
+                if (!selectedPlatforms.length) { showToast('Select at least one platform.'); return; }
+                setComposerOpen(true);
+              }}
+              onPublishFacebook={async () => {
+                if (!caption.trim()) {
+                  showToast('Write your Facebook post first.');
+                  return;
+                }
+                if (!selectedPlatforms.includes('Facebook')) {
+                  showToast('Select Facebook before publishing there.');
+                  return;
+                }
+                if (!connectionState.facebook?.connected) {
+                  showToast('Connect your Facebook Page before publishing.');
+                  return;
+                }
+                if (!window.confirm('Publish this post to your connected Facebook Page now?')) return;
+                setPublishingFacebook(true);
+                try {
+                  const response = await api.post('/api/facebook/publish', { message: caption.trim() });
+                  if (response.data?.published && response.data?.postId) {
+                    showToast('Your post was published to Facebook successfully.');
+                    setCaption('');
+                  } else {
+                    showToast('Facebook did not confirm publication. Please check your Page before retrying.');
+                  }
+                } catch (err) {
+                  const message = (err as { message?: string })?.message;
+                  showToast(message || 'Facebook could not publish this post. Please check your Page connection and try again.');
+                } finally {
+                  setPublishingFacebook(false);
+                }
+              }}
+              publishingFacebook={publishingFacebook}
+              instagramImageUrl={instagramImageUrl}
+              setInstagramImageUrl={setInstagramImageUrl}
+              onPublishInstagram={async () => {
+                if (!caption.trim()) { showToast('Write your Instagram caption first.'); return; }
+                if (!selectedPlatforms.includes('Instagram')) { showToast('Select Instagram before publishing there.'); return; }
+                if (!connectionState.instagram?.connected) { showToast('Reconnect Facebook and approve Instagram access first.'); return; }
+                if (!instagramImageUrl.trim()) { showToast('Add a public HTTPS image URL first.'); return; }
+                if (!window.confirm('Publish this photo and caption to your linked Instagram professional account now?')) return;
+                setPublishingInstagram(true);
+                try {
+                  const response = await api.post('/api/instagram/publish', { caption: caption.trim(), imageUrl: instagramImageUrl.trim() });
+                  if (response.data?.published && response.data?.mediaId) {
+                    showToast('Your photo was published to Instagram successfully.');
