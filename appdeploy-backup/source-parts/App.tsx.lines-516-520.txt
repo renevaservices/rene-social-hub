@@ -1,0 +1,5 @@
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold">This week</h3>
+                      <p className="text-xs text-slate-400">
+                        Publishing activity
