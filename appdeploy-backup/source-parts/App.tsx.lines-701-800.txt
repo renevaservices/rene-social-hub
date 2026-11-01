@@ -1,0 +1,100 @@
+                    setCaption('');
+                    setInstagramImageUrl('');
+                  } else showToast('Instagram did not confirm publication. Check your profile before retrying.');
+                } catch (err) {
+                  showToast((err as { message?: string })?.message || 'Instagram could not publish this photo. Check the image URL and account connection.');
+                } finally { setPublishingInstagram(false); }
+              }}
+              publishingInstagram={publishingInstagram}
+              onPublishThreads={async () => {
+                if (!caption.trim()) {
+                  showToast('Write your Threads post first.');
+                  return;
+                }
+                if (!selectedPlatforms.includes('Threads')) {
+                  showToast('Select Threads before publishing there.');
+                  return;
+                }
+                if (!window.confirm('Publish this text post to your connected Threads account now?')) return;
+                setPublishingThreads(true);
+                try {
+                  const response = await api.post('/api/threads/publish', { text: caption.trim() });
+                  if (response.data?.published && response.data?.mediaId) {
+                    showToast('Your post was published to Threads successfully.');
+                    setCaption('');
+                  } else {
+                    showToast('Threads did not confirm publication. Please check your account before retrying.');
+                  }
+                } catch (err) {
+                  const message = (err as { message?: string })?.message;
+                  showToast(message || 'Threads could not publish this post. Please check your connection and try again.');
+                } finally {
+                  setPublishingThreads(false);
+                }
+              }}
+              publishingThreads={publishingThreads}
+            />
+          )}
+          {active === 'Media Library' && (
+            <Library
+              uploadedMedia={uploadedMedia}
+              uploading={uploadingMedia}
+              onUpload={async (file) => {
+                const currentUser = await auth.getUser().catch(() => null);
+                if (!currentUser) {
+                  showToast('Your sign-in session could not be restored. Please sign in again.');
+                  try { await auth.signInWithRedirect(); } catch { showToast('Sign-in could not be opened. Please try again.'); }
+                  return;
+                }
+                if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { showToast('Please choose a JPG, PNG or WebP image.'); return; }
+                if (file.size > 8 * 1024 * 1024) { showToast('Please choose an image smaller than 8 MB.'); return; }
+                setUploadingMedia(true);
+                try {
+                  const bytes = new Uint8Array(await file.arrayBuffer());
+                  let binary = '';
+                  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+                  const response = await api.post('/api/media/upload', { filename: file.name, contentType: file.type, base64: btoa(binary) });
+                  const media = { filename: response.data.filename || file.name, url: response.data.url, path: response.data.path };
+                  setUploadedMedia(media);
+                  setInstagramImageUrl(media.url);
+                  setInstagramImagePath(media.path);
+                  showToast('Image uploaded. It is ready for your Instagram post.');
+                } catch (err) {
+                  showToast((err as { message?: string })?.message || 'The image could not be uploaded. Please try again.');
+                } finally { setUploadingMedia(false); }
+              }}
+              onUse={() => { setInstagramImageUrl(uploadedMedia?.url || ''); setInstagramImagePath(uploadedMedia?.path || ''); setActive('Create Post'); showToast('Image added to your Instagram post.'); }}
+            />
+          )}
+          {active === 'Analytics' && <Analytics />}
+          {active === 'AI Content Studio' && (
+            <section className="mx-auto max-w-5xl">
+              <div className="mb-6 rounded-2xl bg-slate-900 p-6 text-white">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300"><Sparkles size={15}/> Rene VA Services · AI writer</div>
+                <h2 className="mt-2 text-2xl font-bold">Your daily content studio</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Generate a fresh post and get platform-ready versions for Facebook, Instagram and Threads. This creates drafts only; it does not publish or schedule them.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <label className="block text-sm font-semibold text-slate-700">Optional topic or angle
+                  <input value={dailyTopic} onChange={event => setDailyTopic(event.target.value)} placeholder="e.g. keeping client paperwork organised" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-500" />
+                </label>
+                <button disabled={generatingDailyContent} onClick={async () => {
+                  if (!auth.isSignedIn()) { showToast('Please sign in to generate content securely.'); return; }
+                  setGeneratingDailyContent(true);
+                  try {
+                    const response = await api.post('/api/ai/daily-content', { topic: dailyTopic });
+                    setDailyContent(response.data?.content || null);
+                    if (!response.data?.content) showToast('No draft was returned. Please try again.');
+                  } catch (err) {
+                    showToast((err as { message?: string })?.message || 'AI content generation failed. Please try again.');
+                  } finally { setGeneratingDailyContent(false); }
+                }} className="mt-4 rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">{generatingDailyContent ? 'Creating your content…' : 'Generate today’s content'}</button>
+              </div>
+              {dailyContent && <div className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-amber-800">Today's theme</p><p className="mt-1 font-semibold text-slate-900">{dailyContent.theme}</p></div>
+                {([{name:'Facebook',text:dailyContent.facebook},{name:'Instagram',text:dailyContent.instagram},{name:'Threads',text:dailyContent.threads}] as const).map(post => <article key={post.name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-3 flex items-center justify-between"><h3 className="font-bold">{post.name}</h3><button onClick={() => { setCaption(post.text); setSelectedPlatforms([post.name]); setActive('Create Post'); }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Use in Create Post</button></div><p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{post.text}</p></article>)}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-bold">Create your branded image</h3><p className="mt-2 text-sm leading-6 text-slate-600">{dailyContent.imageBrief}</p><button disabled={generatingDailyImage} onClick={async () => { setGeneratingDailyImage(true); setDailyImageUrl(''); try { const response = await api.post('/api/ai/generate-image', { imageBrief: dailyContent.imageBrief, theme: dailyContent.theme }); const url = response.data?.imageUrl || ''; if (!url) throw new Error('No image link was returned.'); setDailyImageUrl(url); setInstagramImageUrl(url); showToast('Your branded image is ready. Use it in Create Post soon; its secure link expires after 15 minutes.'); } catch (err) { showToast((err as { message?: string })?.message || 'Could not generate the image. Please try again.'); } finally { setGeneratingDailyImage(false); } }} className="mt-4 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{generatingDailyImage ? 'Creating your image…' : 'Generate branded image'}</button>{dailyImageUrl && <div className="mt-4"><img src={dailyImageUrl} alt="Generated Rene VA Services social media graphic" className="w-full max-w-md rounded-xl border border-slate-200"/><button onClick={() => { setCaption(dailyContent.instagram); setSelectedPlatforms(['Instagram']); setActive('Create Post'); }} className="mt-3 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold">Use image and Instagram caption in Create Post</button><p className="mt-2 text-xs text-slate-500">The secure image link expires after 15 minutes. Publish soon after generating it.</p></div>}</div>
+              </div>}
+            </section>
+          )}
+          {active === 'Content Ideas' && (
