@@ -1,0 +1,100 @@
+            <p className="mt-1 text-xs text-slate-400">The image must be publicly accessible online. Private device files and Google Drive preview links will not work.</p>
+          </div>
+        )}
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onPublish}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
+          >
+            Schedule post
+          </button>
+          <button
+            onClick={onPublishFacebook}
+            disabled={publishingFacebook}
+            className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-800 disabled:opacity-50"
+          >
+            {publishingFacebook ? 'Publishing…' : 'Publish to Facebook'}
+          </button>
+          <button
+            onClick={onPublishInstagram}
+            disabled={publishingInstagram}
+            className="rounded-xl border border-pink-200 bg-pink-50 px-5 py-2.5 text-sm font-semibold text-pink-800 disabled:opacity-50"
+          >
+            {publishingInstagram ? 'Publishing…' : 'Publish to Instagram'}
+          </button>
+          <button
+            onClick={onPublishThreads}
+            disabled={publishingThreads}
+            className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {publishingThreads ? 'Publishing…' : 'Publish to Threads'}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+function Library({ uploadedMedia, uploading, onUpload, onUse }: { uploadedMedia: { filename: string; url: string; path: string } | null; uploading: boolean; onUpload: (file: File) => void; onUse: () => void }) {
+  return (
+    <section>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Media library</h2>
+          <p className="text-sm text-slate-500">
+            Keep your social media assets organized.
+          </p>
+        </div>
+        <label className={`flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white ${uploading ? 'opacity-60' : ''}`}>
+          <Plus size={17} />
+          {uploading ? 'Uploading…' : 'Upload image'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) onUpload(file); event.currentTarget.value = ''; }} />
+        </label>
+      </div>
+      {uploadedMedia && <div className="mb-5 max-w-sm rounded-2xl border border-amber-200 bg-white p-4 shadow-sm"><img src={uploadedMedia.url} alt={uploadedMedia.filename} className="aspect-square w-full rounded-xl object-contain bg-slate-50" /><p className="mt-3 truncate text-sm font-semibold">{uploadedMedia.filename}</p><button onClick={onUse} className="mt-3 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950">Use for Instagram post</button><p className="mt-2 text-xs text-slate-500">Uploaded images are kept in your private app storage. A fresh secure image link is created when a scheduled post is due.</p></div>}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {[
+          'VA Toolkit',
+          'Client tip',
+          'Pinterest pin',
+          'Behind the scenes',
+          'Promo graphic',
+          'Reel cover',
+          'Course launch',
+          'Testimonial',
+        ].map(item => (
+          <div
+            key={item}
+            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+          >
+            <div className="flex aspect-square items-center justify-center bg-slate-100 text-slate-300">
+              <Image size={30} />
+            </div>
+            <div className="p-3 text-sm font-semibold">{item}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+function Analytics() {
+  return (
+    <section>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">Analytics</h2>
+        <p className="text-sm text-slate-500">
+          Understand what content is working across your platforms.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {[
+          ['Reach', '18.6K', '+12.7%'],
+          ['Engagement', '6.8%', '+1.2%'],
+          ['Profile visits', '2,143', '+9.4%'],
+        ].map(([a, b, c]) => (
+          <div
