@@ -1,0 +1,100 @@
+            </div>
+            <div className="mt-5">
+              <h4 className="font-bold text-slate-900">Results by platform</h4>
+              <div className="mt-3 space-y-3">
+                {selectedPost.platforms.map(platform => {
+                  const result = selectedPost.platformResults?.[platform];
+                  return (
+                    <div key={platform} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-800">{platform}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${result?.published ? 'bg-emerald-50 text-emerald-700' : result ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {result?.published ? 'Published' : result ? 'Not confirmed' : 'No result recorded'}
+                        </span>
+                      </div>
+                      {result?.error && <p className="mt-2 text-sm text-rose-700">{result.error}</p>}
+                      {result?.id && <p className="mt-2 break-all text-xs text-slate-500">Publication ID: {result.id}</p>}
+                      {!result && <p className="mt-2 text-sm text-slate-500">No publishing confirmation was saved for this platform.</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {selectedPost.lastError && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-semibold text-amber-900">What needs attention</p><p className="mt-1 text-sm text-amber-800">{selectedPost.lastError}</p></div>}
+            {selectedPost.publishedAt && <p className="mt-4 text-xs text-slate-500">Confirmed published: {new Date(selectedPost.publishedAt).toLocaleString()}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => { onRefresh(); setSelectedPost(null); }} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Refresh results</button>
+              <button onClick={() => setSelectedPost(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">Close</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
+function Composer({
+  caption,
+  setCaption,
+  selectedPlatforms,
+  togglePlatform,
+  onClose,
+  onPublish,
+  onPublishThreads,
+  publishingThreads,
+  onPublishFacebook,
+  publishingFacebook,
+  instagramImageUrl,
+  setInstagramImageUrl,
+  onPublishInstagram,
+  publishingInstagram,
+}: {
+  caption: string;
+  setCaption: (v: string) => void;
+  selectedPlatforms: string[];
+  togglePlatform: (v: string) => void;
+  onClose: () => void;
+  onPublish: () => void;
+  onPublishThreads: () => void;
+  publishingThreads: boolean;
+  onPublishFacebook: () => void;
+  publishingFacebook: boolean;
+  instagramImageUrl: string;
+  setInstagramImageUrl: (v: string) => void;
+  onPublishInstagram: () => void;
+  publishingInstagram: boolean;
+}) {
+  return (
+    <section className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">Create post</h2>
+        <p className="text-sm text-slate-500">
+          Prepare content for Facebook, Instagram and Threads. Threads text posts can be published now after confirmation.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label className="text-sm font-semibold">Your content</label>
+        <textarea
+          value={caption}
+          onChange={e => setCaption(e.target.value)}
+          className="mt-2 h-44 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm outline-none"
+          placeholder="Write your post here..."
+        />
+        <div className="mt-5">
+          <div className="mb-2 text-sm font-semibold">Publish to</div>
+          <div className="flex flex-wrap gap-2">
+            {platforms.map(({ name, icon: Icon }) => (
+              <button
+                key={name}
+                onClick={() => togglePlatform(name)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${selectedPlatforms.includes(name) ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}
+              >
+                <Icon size={14} />
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+        {selectedPlatforms.includes('Instagram') && (
+          <div className="mt-4">
+            <label className="text-sm font-semibold">Instagram photo URL (public HTTPS link)</label>
+            <input value={instagramImageUrl} onChange={e => setInstagramImageUrl(e.target.value)} placeholder="https://your-public-image-link.jpg" className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400" />
