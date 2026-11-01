@@ -1,0 +1,76 @@
+            key={a}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <div className="text-sm text-slate-500">{a}</div>
+            <div className="mt-2 text-3xl font-bold">{b}</div>
+            <div className="mt-1 text-xs font-semibold text-emerald-600">
+              {c} vs last period
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="font-bold">Performance by platform</h3>
+        <div className="mt-5 space-y-4">
+          {platforms.map(({ name, followers }) => (
+            <div key={name}>
+              <div className="mb-1 flex justify-between text-xs">
+                <span className="font-semibold">{name}</span>
+                <span className="text-slate-400">{followers}</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100">
+                <div
+                  className="h-2 rounded-full bg-slate-900"
+                  style={{ width: `${35 + Math.floor(Math.random() * 55)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+function Ideas({ onUse }: { onUse: (idea: string) => void }) {
+  const ideas = [
+    '3 things every busy business owner should delegate',
+    'A behind-the-scenes look at how I organize a client’s week',
+    'Why your social media doesn’t need to be complicated',
+    'Quick VA tip: create a weekly content checklist',
+    'What I wish every new virtual assistant knew',
+  ];
+  return (
+    <section>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">Content ideas</h2>
+        <p className="text-sm text-slate-500">
+          Fresh prompts for Rene VA Services.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {ideas.map((idea, i) => (
+          <div
+            key={idea}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100">
+              <Lightbulb size={17} />
+            </div>
+            <h3 className="font-semibold">{idea}</h3>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Turn this idea into a helpful, authentic post for your audience.
+            </p>
+            <button
+              onClick={() => onUse(idea)}
+              className="mt-4 text-xs font-bold text-slate-700 hover:underline"
+            >
+              Use this idea →
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default App;
