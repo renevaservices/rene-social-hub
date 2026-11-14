@@ -85,12 +85,15 @@ async function finishFacebook(request, env) {
     if (pages.length !== 1) return html("Zero or multiple Pages returned. Page selection is required.", 409);
     const page = pages[0];
     const ciphertext = await encryptToken(page.access_token, env.FACEBOOK_TOKEN_ENCRYPTION_KEY);
-    await env.DB.prepare(
-      "INSERT INTO facebook_connections (id,page_id,page_name,encrypted_access_token,created_at,updated_at) " +
-      "VALUES (?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) " +
-      "ON CONFLICT(page_id) DO UPDATE SET page_name=excluded.page_name, " +
-      "encrypted_access_token=excluded.encrypted_access_token,updated_at=CURRENT_TIMESTAMP"
-    ).bind(crypto.randomUUID(), page.id, page.name, ciphertext).run();
+    // D1 schema may not declare page_id UNIQUE. Use an atomic batch instead
+    // of ON CONFLICT(page_id), which requires a UNIQUE constraint.
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM facebook_connections WHERE page_id = ?").bind(page.id),
+      env.DB.prepare(
+        "INSERT INTO facebook_connections (id,page_id,page_name,encrypted_access_token,created_at,updated_at) " +
+        "VALUES (?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+      ).bind(crypto.randomUUID(), page.id, page.name, ciphertext)
+    ]);
     return html("Facebook Page connection saved. Automatic publishing remains disabled.");
   } catch (_) {
     console.error("Facebook callback failed (sensitive details withheld)");
