@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rene-social-hub-api-test",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rene-social-hub-db",
+      "database_id": "98d0765f-6b57-465c-989d-4e0a9f1e8aab"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}
