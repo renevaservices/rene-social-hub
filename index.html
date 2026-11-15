@@ -68,6 +68,12 @@
   </section>
   <section class="page" id="page-planner">
     <div class="page-intro"><div><h2>Post planner</h2><p>Draft a post and keep the caption ready for publishing.</p></div></div>
+    <section class="panel" aria-label="Seven-day posting plan">
+      <div class="panel-head"><h3>7-day Facebook plan</h3><span class="pill">09:00 SAST</span></div>
+      <p class="muted">Prepare seven daily post ideas for Rene VA Services. Review them before scheduling. This does not publish or send posts to Facebook.</p>
+      <button type="button" id="prepare-seven-days" style="background:#173454;color:#fff;border:0;border-radius:10px;padding:11px 16px;font-weight:700">Prepare 7 Days</button>
+      <div id="seven-day-preview" aria-live="polite" style="margin-top:12px"></div>
+    </section>
     <div class="grid-two">
       <section class="panel"><div class="panel-head"><h3 id="form-heading">Create a post</h3><span class="pill">New draft</span></div>
         <form id="post-form">
@@ -155,6 +161,40 @@ render();
       status.textContent='Planning enabled · Status unavailable';
       note.textContent='Could not check the live connection. Your saved content is unaffected; try refreshing later.';
     });
+})();
+</script>
+<script>
+(function(){
+ const button=document.getElementById('prepare-seven-days');
+ const preview=document.getElementById('seven-day-preview');
+ if(!button||!preview)return;
+ const ideas=[
+  'Start your week organised: I help busy business owners with reliable virtual administrative support. Contact Rene VA Services to discuss your admin needs.',
+  'Data entry taking too much time? I can help organise spreadsheets, update records and keep your business information tidy.',
+  'A professional website helps customers find your business. I offer website development and support alongside virtual assistance.',
+  'Need documents formatted or organised? I provide practical document management and administrative assistance for small businesses.',
+  'Staying organised matters. I can help with online research, information gathering and everyday business administration.',
+  'Your business deserves an organised online presence. Ask me about website updates, virtual assistance and data entry support.',
+  'Plan ahead for a calmer week. I offer flexible virtual administrative assistance and website support. Email renevaservices@gmail.com.'
+ ];
+ function dayString(d){return d.toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'Africa/Johannesburg'})}
+ button.addEventListener('click',()=>{
+  const now=new Date();
+  const localDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  const [year,month,day]=localDate.split('-').map(Number);
+  const start=new Date(Date.UTC(year,month-1,day+1,7,0));
+  const plan=ideas.map((caption,i)=>({date:new Date(start.getTime()+i*86400000).toISOString(),platform:'Facebook',caption,status:'Preview only'}));
+  try{localStorage.setItem('reneSocialHub.sevenDayPreview.v1',JSON.stringify(plan))}catch(e){}
+  preview.replaceChildren();
+  const title=document.createElement('p');title.textContent='Seven posts prepared for review (not scheduled):';preview.appendChild(title);
+  for(const item of plan){
+   const card=document.createElement('div');card.style.cssText='padding:12px;margin:8px 0;border:1px solid #e7dfce;border-radius:10px;background:#fff';
+   const date=document.createElement('strong');date.textContent=dayString(new Date(item.date))+' · 09:00 SAST';
+   const caption=document.createElement('p');caption.textContent=item.caption;caption.style.margin='6px 0 0';
+   card.append(date,caption);preview.appendChild(card);
+  }
+  const note=document.createElement('p');note.textContent='These are local previews only. Facebook publishing remains off until you approve scheduling.';note.style.fontWeight='600';preview.appendChild(note);
+ });
 })();
 </script>
 </body>
