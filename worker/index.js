@@ -137,8 +137,8 @@ async function scheduleSevenDays(request, env) {
   let payload;
   try { payload = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { startDate, time, captions } = payload || {};
-  if (typeof startDate !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate) ||
-      typeof time !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time) ||
+  if (typeof startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+      typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) ||
       !Array.isArray(captions) || captions.length !== 7 ||
       !captions.every(c => typeof c === 'string' && c.trim().length > 0 && c.length <= 5000)) {
     return json({ error: 'Provide a valid start date, SAST time and seven captions (1–5000 characters each)' }, 400);
@@ -150,6 +150,13 @@ async function scheduleSevenDays(request, env) {
   if (dateCheck !== startDate || first < Date.now() + 5*60*1000 || first > Date.now()+365*86400000) {
     return json({ error: 'Choose a real date at least five minutes ahead and within one year' }, 400);
   }
+  // Do not schedule a second post at an occupied Facebook publishing time.
+  // The existing approved week is protected by this overlap check.
+  const timestamps = captions.map((_,i)=>new Date(first+i*86400000).toISOString());
+  const occupied = await env.DB.prepare(
+    "SELECT id,scheduled_at FROM scheduled_posts WHERE platform = 'facebook' AND status IN ('scheduled','processing','published') AND scheduled_at >= ? AND scheduled_at <= ? LIMIT 1"
+  ).bind(timestamps[0],timestamps[6]).first();
+  if (occupied) return json({ error: 'This date range overlaps existing Facebook posts. Choose a week without scheduled or published posts.' }, 409);
   const idPrefix = 'rene-owner-week-' + startDate + '-' + time.replace(':','');
   const statements = captions.map((caption,i) => env.DB.prepare(
     "INSERT INTO scheduled_posts(id,content,platform,scheduled_at,status) VALUES(?,?,'facebook',?,'scheduled') ON CONFLICT(id) DO NOTHING"
