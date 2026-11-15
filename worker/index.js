@@ -186,7 +186,29 @@ const WEEKLY_CAPTIONS = [
   'Behind every organised business are systems that work. I can help maintain records, manage documents and support everyday operations.',
   'Make next week easier with flexible virtual assistance. Reach me at renevaservices@gmail.com to discuss your admin or website needs.'
 ];
-async function prepareNextFacebookWeek(db, scheduledTime) {
+async function generateNaturalWeeklyCaptions(ai, weekStart) {
+  if (!ai || typeof ai.run !== 'function') throw new Error('Workers AI binding unavailable');
+  const prompt = `Write exactly 7 fresh, distinct Facebook posts for Rene VA Services, a small South African business run by one person. Week starting ${weekStart}.
+Services: virtual assistance, documents, forms, data entry, organising business information, website development and support. Use natural first-person English as Rene ("I", "my"), friendly and down-to-earth, without sounding like an AI marketing bot.
+Mix practical tips, observations and gentle invitations to enquire. Vary openings, lengths (35-85 words), topics and structure. Never invent testimonials, clients, achievements, discounts, prices, guarantees or availability. No hashtags, generic motivational slogans, em dashes, excessive emojis, or "in today's fast-paced world". Do not imply that services are free. Include renevaservices@gmail.com in no more than two posts.
+Return ONLY a JSON array of seven strings, no markdown or explanation.`;
+  const result = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+    messages: [{role:'system',content:'You write authentic business Facebook captions and return strict JSON only.'},{role:'user',content:prompt}],
+    max_tokens: 1450, temperature: 0.8
+  });
+  const raw = typeof result?.response === 'string' ? result.response.trim() : '';
+  const clean = raw.replace(/^\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`$/,'');
+  let captions;
+  try { captions = JSON.parse(clean); } catch { throw new Error('AI response was not valid JSON'); }
+  if (!Array.isArray(captions) || captions.length !== 7 ||
+      !captions.every(c=>typeof c==='string' && c.trim().length>=90 && c.length<=1200)) {
+    throw new Error('AI returned invalid weekly captions');
+  }
+  const normalized = captions.map(c=>c.trim());
+  if (new Set(normalized.map(c=>c.toLowerCase())).size !== 7) throw new Error('AI returned duplicate captions');
+  return normalized;
+}
+async function prepareNextFacebookWeek(db, scheduledTime, ai) {
   // Johannesburg has a fixed UTC+02:00 offset year-round.
   const local = new Date(scheduledTime + 2 * 3600000);
   if (local.getUTCDay() !== 0) return { prepared: 0, reason: 'not_sunday' };
@@ -198,7 +220,10 @@ async function prepareNextFacebookWeek(db, scheduledTime) {
   ).bind(beginning,end).first();
   if (occupied) return { prepared: 0, reason: 'week_already_occupied' };
   const weekIndex = Math.floor(monday/(7*86400000));
-  const captions = WEEKLY_CAPTIONS.slice((weekIndex%2)*7, (weekIndex%2+1)*7);
+  // If AI fails, keep the existing approved captions as a safe fallback.
+  let captions;
+  try { captions = await generateNaturalWeeklyCaptions(ai, new Date(monday).toISOString().slice(0,10)); }
+  catch (error) { console.warn('Weekly AI generation unavailable; using approved fallback'); captions = WEEKLY_CAPTIONS.slice((weekIndex%2)*7, (weekIndex%2+1)*7); }
   const rows = captions.map((caption,i) => db.prepare(
     "INSERT OR IGNORE INTO scheduled_posts(id,content,platform,scheduled_at,status) VALUES(?,?,'facebook',?,'scheduled')"
   ).bind('rene-auto-week-'+new Date(monday).toISOString().slice(0,10)+'-'+(i+1),caption,new Date(monday+i*86400000).toISOString()));
@@ -292,7 +317,7 @@ export default {
       ).bind(new Date(event.scheduledTime).toISOString()).first();
       console.log('Rene Social Hub scheduled check', { duePosts: result.total, publishingEnabled: env.AUTO_WEEKLY_FACEBOOK_ENABLED === 'true' });
       if (env.AUTO_WEEKLY_FACEBOOK_ENABLED !== 'true') return;
-      const prepared = await prepareNextFacebookWeek(env.DB, event.scheduledTime);
+      const prepared = await prepareNextFacebookWeek(env.DB, event.scheduledTime, env.AI);
       console.log('Weekly Facebook planning', prepared);
       const due = await env.DB.prepare(
         "SELECT id FROM scheduled_posts WHERE platform = 'facebook' AND status = 'scheduled' AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 7"
