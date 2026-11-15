@@ -166,6 +166,45 @@ async function scheduleSevenDays(request, env) {
   return json({ ok: true, created, alreadyExists: 7-created, scheduledDates: captions.map((_,i)=>new Date(first+i*86400000).toISOString()), note: 'Existing scheduled posts are never overwritten.' }, created === 7 ? 201 : 200);
 }
 
+
+// Draft recurring weekly automation. OFF until a private Worker environment
+// setting AUTO_WEEKLY_FACEBOOK_ENABLED is explicitly set to "true".
+// No public endpoint can enable it.
+const WEEKLY_CAPTIONS = [
+  'Running a business is busy enough. I offer virtual administrative assistance to help keep your day-to-day work organised. Contact Rene VA Services to discuss your needs.',
+  'Need help with data entry? I can organise spreadsheets, update records and assist with accurate document management for your business.',
+  'Your website is often your first introduction to a customer. I offer website development and ongoing website support for small businesses.',
+  'Need more time for your customers? I can help with online research, administrative tasks and business organisation.',
+  'A tidy document system can save time. I provide document formatting, filing support and practical virtual administration.',
+  'Keep your business moving without juggling every detail yourself. Ask me about flexible virtual assistance and website support.',
+  'Planning the week ahead? I can help with data entry, documents and business administration. Email renevaservices@gmail.com.',
+  'A reliable virtual assistant can help you focus on the work you enjoy. I offer remote administrative support for small businesses and entrepreneurs.',
+  'From spreadsheets to everyday paperwork, I help businesses stay organised through practical data entry and administrative services.',
+  'Need a clearer online presence? I can help develop or update your business website and support the details behind the scenes.',
+  'Online research can take hours. I can gather and organise information so you have more time to focus on your business.',
+  'Business documents deserve attention to detail. Ask Rene VA Services about formatting, organisation and administrative support.',
+  'Behind every organised business are systems that work. I can help maintain records, manage documents and support everyday operations.',
+  'Make next week easier with flexible virtual assistance. Reach me at renevaservices@gmail.com to discuss your admin or website needs.'
+];
+async function prepareNextFacebookWeek(db, scheduledTime) {
+  // Johannesburg has a fixed UTC+02:00 offset year-round.
+  const local = new Date(scheduledTime + 2 * 3600000);
+  if (local.getUTCDay() !== 0) return { prepared: 0, reason: 'not_sunday' };
+  const monday = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()+1, 7, 0);
+  const end = new Date(monday+6*86400000).toISOString();
+  const beginning = new Date(monday).toISOString();
+  const occupied = await db.prepare(
+    "SELECT id FROM scheduled_posts WHERE platform = 'facebook' AND status IN ('scheduled','processing','published') AND scheduled_at >= ? AND scheduled_at <= ? LIMIT 1"
+  ).bind(beginning,end).first();
+  if (occupied) return { prepared: 0, reason: 'week_already_occupied' };
+  const weekIndex = Math.floor(monday/(7*86400000));
+  const captions = WEEKLY_CAPTIONS.slice((weekIndex%2)*7, (weekIndex%2+1)*7);
+  const rows = captions.map((caption,i) => db.prepare(
+    "INSERT OR IGNORE INTO scheduled_posts(id,content,platform,scheduled_at,status) VALUES(?,?,'facebook',?,'scheduled')"
+  ).bind('rene-auto-week-'+new Date(monday).toISOString().slice(0,10)+'-'+(i+1),caption,new Date(monday+i*86400000).toISOString()));
+  const results = await db.batch(rows);
+  return { prepared: results.reduce((n,x)=>n+(x.meta?.changes||0),0) };
+}
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -252,17 +291,20 @@ export default {
         "SELECT COUNT(*) AS total FROM scheduled_posts WHERE status = 'scheduled' AND scheduled_at <= ?"
       ).bind(new Date(event.scheduledTime).toISOString()).first();
       console.log('Rene Social Hub scheduled check', { duePosts: result.total, publishingEnabled: false });
-      // Explicitly approved one-time Facebook promotional test (15 November 2026).
-      // No other post is eligible for publishing through this handler.
-      const testId = 'facebook-approved-promo-2026-11-15';
-      const outcome = await publishScheduledFacebookPost({
-        db: env.DB,
-        postId: testId,
-        resolvePageAccessToken: db => resolveFacebookPageToken(db, env),
-        enabled: true
-      });
-      console.log('One-time Facebook test outcome', { ok: outcome.ok, reason: outcome.reason || null });
-      // All regular automatic publishing remains disabled.
+      if (env.AUTO_WEEKLY_FACEBOOK_ENABLED !== 'true') return;
+      const prepared = await prepareNextFacebookWeek(env.DB, event.scheduledTime);
+      console.log('Weekly Facebook planning', prepared);
+      const due = await env.DB.prepare(
+        "SELECT id FROM scheduled_posts WHERE platform = 'facebook' AND status = 'scheduled' AND id LIKE 'rene-auto-week-%' AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 7"
+      ).bind(new Date(event.scheduledTime).toISOString()).all();
+      for (const post of due.results || []) {
+        const outcome = await publishScheduledFacebookPost({
+          db: env.DB, postId: post.id,
+          resolvePageAccessToken: db => resolveFacebookPageToken(db, env),
+          enabled: true
+        });
+        console.log('Recurring Facebook publishing', { id: post.id, ok: outcome.ok, reason: outcome.reason || null });
+      }
     })());
   }
 };
