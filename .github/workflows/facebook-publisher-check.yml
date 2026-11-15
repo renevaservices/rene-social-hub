@@ -1,0 +1,28 @@
+name: Safe Facebook publisher checks
+on:
+  pull_request:
+    paths:
+      - 'worker/**'
+      - '.github/workflows/facebook-publisher-check.yml'
+  push:
+    branches:
+      - feature/facebook-safe-publisher
+    paths:
+      - 'worker/**'
+      - '.github/workflows/facebook-publisher-check.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript module syntax
+        run: |
+          node --input-type=module --check < worker/index.js
+          node --input-type=module --check < worker/facebook-publisher.js
+      - name: Run publisher safety tests
+        run: node --test worker/facebook-publisher.test.mjs
