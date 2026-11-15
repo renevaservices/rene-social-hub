@@ -157,6 +157,19 @@ export default {
       catch (error) { console.error('Facebook callback failed'); return html('Facebook connection could not be completed.', 500); }
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/platforms/status') {
+      try {
+        const connection = await env.DB.prepare('SELECT id FROM facebook_connections LIMIT 1').first();
+        return new Response(JSON.stringify({
+          facebook: { connectionSaved: Boolean(connection), publishingEnabled: false, tokenVerified: false },
+          instagram: { connectionSaved: false },
+          threads: { connectionSaved: false }
+        }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': 'https://renevaservices.github.io', 'Cache-Control': 'no-store' } });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: 'Status temporarily unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': 'https://renevaservices.github.io', 'Cache-Control': 'no-store' } });
+      }
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/publishing/facebook/check') {
       return checkFacebookPublisher(request, env);
     }
