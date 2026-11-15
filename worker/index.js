@@ -123,6 +123,37 @@ async function resolveFacebookPageToken(db, env) {
   return { pageId: page.page_id, accessToken: await decryptToken(page.encrypted_access_token, env.FACEBOOK_TOKEN_ENCRYPTION_KEY) };
 }
 
+// Owner-only Instagram readiness check. Does not publish, save credentials or
+// reveal the Facebook Page access token to the browser.
+async function checkInstagramReadiness(request, env) {
+  if (!setupAuthorized(request, env)) return json({ error: 'Owner authentication required' }, 401);
+  let page;
+  try { page = await resolveFacebookPageToken(env.DB, env); }
+  catch { return json({ connected: false, reason: 'facebook_page_connection_missing' }, 200); }
+  const endpoint = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(page.pageId)}`);
+  endpoint.searchParams.set('fields', 'instagram_business_account{id,username},connected_instagram_account{id,username}');
+  // Meta recommends sending tokens in an Authorization header rather than URLs.
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${page.accessToken}`, 'Cache-Control': 'no-store' }
+    });
+  } catch {
+    return json({ connected: false, reason: 'meta_temporarily_unavailable' }, 503);
+  }
+  if (!response.ok) return json({ connected: false, reason: 'meta_permission_or_connection_check_failed', status: response.status }, 200);
+  const data = await response.json();
+  const account = data.instagram_business_account || data.connected_instagram_account;
+  if (!account?.id) return json({ connected: false, reason: 'instagram_account_not_visible_to_page_token' });
+  return json({
+    connected: true,
+    username: account.username || null,
+    accountId: account.id,
+    publishingReady: false,
+    nextStep: 'Verify instagram_content_publish permission and image hosting before enabling posting'
+  });
+}
+
 async function checkFacebookPublisher(request, env) {
   if (!setupAuthorized(request, env)) return json({ error: 'Unauthorized' }, 401);
   const row = await env.DB.prepare("SELECT id, platform, status, scheduled_at FROM scheduled_posts WHERE platform = 'facebook' ORDER BY created_at DESC LIMIT 1").first();
@@ -256,6 +287,11 @@ export default {
     if (request.method === 'GET' && url.pathname === '/api/oauth/callback/facebook') {
       try { return await finishFacebookConnection(url, env); }
       catch (error) { console.error('Facebook callback failed'); return html('Facebook connection could not be completed.', 500); }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/platforms/instagram/readiness') {
+      try { return await checkInstagramReadiness(request, env); }
+      catch { return json({ error: 'Instagram readiness check failed' }, 503); }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/platforms/status') {
