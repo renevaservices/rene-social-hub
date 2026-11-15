@@ -209,8 +209,15 @@ render();
  date.addEventListener('change',()=>{if(date.value){plan.startDate=date.value;render();status.textContent='Unsaved changes'}});
  time.addEventListener('change',()=>{if(time.value){plan.time=time.value;render();status.textContent='Unsaved changes'}});
  saveButton.addEventListener('click',()=>{if(plan.captions.some(c=>!c.trim())){status.textContent='Please add text to all seven captions before saving.';return}status.textContent=save()?'Seven-day draft saved on this device. Not scheduled to Facebook.':'Unable to save on this device.'});
+ const scheduleButton=document.createElement('button');
+ scheduleButton.type='button';
+ scheduleButton.textContent='Schedule All 7 Days';
+ scheduleButton.style.cssText='background:#b98b27;color:#111;border:0;border-radius:10px;padding:12px 16px;font-weight:700;margin:12px 0 0 10px';
+ scheduleButton.addEventListener('click',()=>{
+   status.textContent='Secure scheduling is not connected yet. Your seven-day draft is safe, and no posts were submitted. Please use Save 7-Day Draft for now.';
+ });
  button.textContent='Open 7-Day Editor';
- button.addEventListener('click',()=>{preview.replaceChildren();preview.append(dates,note,cards,saveButton,status);render()});
+ button.addEventListener('click',()=>{preview.replaceChildren();preview.append(dates,note,cards,saveButton,scheduleButton,status);render()});
 })();
 </script>
 </body>
