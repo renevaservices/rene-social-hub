@@ -168,6 +168,7 @@ render();
  const button=document.getElementById('prepare-seven-days');
  const preview=document.getElementById('seven-day-preview');
  if(!button||!preview)return;
+ const key='reneSocialHub.sevenDayEditor.v2';
  const ideas=[
   'Start your week organised: I help busy business owners with reliable virtual administrative support. Contact Rene VA Services to discuss your admin needs.',
   'Data entry taking too much time? I can help organise spreadsheets, update records and keep your business information tidy.',
@@ -177,24 +178,39 @@ render();
   'Your business deserves an organised online presence. Ask me about website updates, virtual assistance and data entry support.',
   'Plan ahead for a calmer week. I offer flexible virtual administrative assistance and website support. Email renevaservices@gmail.com.'
  ];
- function dayString(d){return d.toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'Africa/Johannesburg'})}
- button.addEventListener('click',()=>{
-  const now=new Date();
-  const localDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
-  const [year,month,day]=localDate.split('-').map(Number);
-  const start=new Date(Date.UTC(year,month-1,day+1,7,0));
-  const plan=ideas.map((caption,i)=>({date:new Date(start.getTime()+i*86400000).toISOString(),platform:'Facebook',caption,status:'Preview only'}));
-  try{localStorage.setItem('reneSocialHub.sevenDayPreview.v1',JSON.stringify(plan))}catch(e){}
-  preview.replaceChildren();
-  const title=document.createElement('p');title.textContent='Seven posts prepared for review (not scheduled):';preview.appendChild(title);
-  for(const item of plan){
-   const card=document.createElement('div');card.style.cssText='padding:12px;margin:8px 0;border:1px solid #e7dfce;border-radius:10px;background:#fff';
-   const date=document.createElement('strong');date.textContent=dayString(new Date(item.date))+' · 09:00 SAST';
-   const caption=document.createElement('p');caption.textContent=item.caption;caption.style.margin='6px 0 0';
-   card.append(date,caption);preview.appendChild(card);
+ let plan;
+ try{const saved=JSON.parse(localStorage.getItem(key));if(saved&&/^\\d{4}-\\d{2}-\\d{2}$/.test(saved.startDate)&&/^\\d{2}:\\d{2}$/.test(saved.time)&&Array.isArray(saved.captions)&&saved.captions.length===7&&saved.captions.every(c=>typeof c==='string'))plan=saved}catch(e){}
+ const pad=n=>String(n).padStart(2,'0');
+ function tomorrowSast(){const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const get=k=>Number(parts.find(p=>p.type===k).value);const d=new Date(Date.UTC(get('year'),get('month')-1,get('day')+1));return d.toISOString().slice(0,10)}
+ if(!plan)plan={startDate:tomorrowSast(),time:'09:00',captions:[...ideas]};
+ const save=()=>{try{localStorage.setItem(key,JSON.stringify(plan));return true}catch(e){return false}};
+ const field=(labelText,element)=>{const box=document.createElement('label');box.style.cssText='display:flex;flex-direction:column;gap:5px;font-weight:600;min-width:140px;flex:1';box.append(document.createTextNode(labelText),element);return box};
+ const dates=document.createElement('div');dates.style.cssText='display:flex;flex-wrap:wrap;gap:12px;margin:12px 0';
+ const date=document.createElement('input');date.type='date';date.value=plan.startDate;date.style.padding='9px';
+ const time=document.createElement('input');time.type='time';time.value=plan.time;time.style.padding='9px';
+ dates.append(field('First posting date',date),field('Daily time (SAST)',time));
+ const note=document.createElement('p');note.style.fontWeight='600';note.textContent='Draft editor only — saving here does not schedule or publish to Facebook.';
+ const status=document.createElement('p');status.setAttribute('role','status');
+ const cards=document.createElement('div');
+ const saveButton=document.createElement('button');saveButton.type='button';saveButton.textContent='Save 7-Day Draft';saveButton.style.cssText='background:#173454;color:white;border:0;border-radius:10px;padding:12px 16px;font-weight:700;margin-top:12px';
+ function render(){
+  cards.replaceChildren();
+  for(let i=0;i<7;i++){
+   const d=new Date(plan.startDate+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);
+   const day=d.toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+   const card=document.createElement('div');card.style.cssText='padding:12px;margin:9px 0;border:1px solid #e7dfce;border-radius:10px;background:#fff';
+   const caption=document.createElement('textarea');caption.rows=4;caption.maxLength=5000;caption.value=plan.captions[i];caption.style.cssText='width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border:1px solid #aaa;border-radius:7px';
+   caption.setAttribute('aria-label','Facebook caption for '+day);
+   caption.addEventListener('input',()=>{plan.captions[i]=caption.value;status.textContent='Unsaved changes';});
+   const title=document.createElement('strong');title.textContent=day+' · '+plan.time+' SAST';
+   card.append(title,caption);cards.appendChild(card);
   }
-  const note=document.createElement('p');note.textContent='These are local previews only. Facebook publishing remains off until you approve scheduling.';note.style.fontWeight='600';preview.appendChild(note);
- });
+ }
+ date.addEventListener('change',()=>{if(date.value){plan.startDate=date.value;render();status.textContent='Unsaved changes'}});
+ time.addEventListener('change',()=>{if(time.value){plan.time=time.value;render();status.textContent='Unsaved changes'}});
+ saveButton.addEventListener('click',()=>{if(plan.captions.some(c=>!c.trim())){status.textContent='Please add text to all seven captions before saving.';return}status.textContent=save()?'Seven-day draft saved on this device. Not scheduled to Facebook.':'Unable to save on this device.'});
+ button.textContent='Open 7-Day Editor';
+ button.addEventListener('click',()=>{preview.replaceChildren();preview.append(dates,note,cards,saveButton,status);render()});
 })();
 </script>
 </body>
