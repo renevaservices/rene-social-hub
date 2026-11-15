@@ -210,8 +210,17 @@ export default {
         "SELECT COUNT(*) AS total FROM scheduled_posts WHERE status = 'scheduled' AND scheduled_at <= ?"
       ).bind(new Date(event.scheduledTime).toISOString()).first();
       console.log('Rene Social Hub scheduled check', { duePosts: result.total, publishingEnabled: false });
-      // Safety gate: do not call publishScheduledFacebookPost until explicit approval
-      // and a controlled, reviewed production release.
+      // Explicitly approved one-time Facebook promotional test (15 November 2026).
+      // No other post is eligible for publishing through this handler.
+      const testId = 'facebook-approved-promo-2026-11-15';
+      const outcome = await publishScheduledFacebookPost({
+        db: env.DB,
+        postId: testId,
+        resolvePageAccessToken: db => resolveFacebookPageToken(db, env),
+        enabled: true
+      });
+      console.log('One-time Facebook test outcome', { ok: outcome.ok, reason: outcome.reason || null });
+      // All regular automatic publishing remains disabled.
     })());
   }
 };
