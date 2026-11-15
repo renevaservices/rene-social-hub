@@ -170,6 +170,33 @@ export default {
       }
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/platforms/facebook/verify') {
+      const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': 'https://renevaservices.github.io', 'Cache-Control': 'no-store' };
+      try {
+        const { pageId, accessToken } = await resolveFacebookPageToken(env.DB, env);
+        const endpoint = new URL('https://graph.facebook.com/v22.0/debug_token');
+        endpoint.searchParams.set('input_token', accessToken);
+        endpoint.searchParams.set('access_token', env.FACEBOOK_APP_ID + '|' + env.FACEBOOK_APP_SECRET);
+        const result = await fetch(endpoint.toString(), { method: 'GET', signal: AbortSignal.timeout(10000) });
+        const payload = await result.json();
+        const info = payload?.data;
+        const valid = Boolean(result.ok && info?.is_valid);
+        const scopes = Array.isArray(info?.scopes) ? info.scopes : [];
+        const hasPublishScope = scopes.includes('pages_manage_posts') || scopes.includes('publish_pages');
+        const pageMatches = String(info?.profile_id || info?.user_id || '') === String(pageId);
+        return new Response(JSON.stringify({
+          tokenValid: valid,
+          publishScopeGranted: valid && hasPublishScope,
+          pageIdentityConfirmed: valid && pageMatches,
+          publishingEnabled: false,
+          verificationCompleted: Boolean(result.ok && info),
+          note: 'This read-only check does not publish a post.'
+        }), { headers });
+      } catch (error) {
+        return new Response(JSON.stringify({ tokenValid: false, publishScopeGranted: false, verificationCompleted: false, publishingEnabled: false, note: 'Verification unavailable; no post was sent.' }), { status: 503, headers });
+      }
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/publishing/facebook/check') {
       return checkFacebookPublisher(request, env);
     }
