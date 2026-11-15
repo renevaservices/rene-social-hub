@@ -179,7 +179,7 @@ render();
   'Plan ahead for a calmer week. I offer flexible virtual administrative assistance and website support. Email renevaservices@gmail.com.'
  ];
  let plan;
- try{const saved=JSON.parse(localStorage.getItem(key));if(saved&&/^\\d{4}-\\d{2}-\\d{2}$/.test(saved.startDate)&&/^\\d{2}:\\d{2}$/.test(saved.time)&&Array.isArray(saved.captions)&&saved.captions.length===7&&saved.captions.every(c=>typeof c==='string'))plan=saved}catch(e){}
+ try{const saved=JSON.parse(localStorage.getItem(key));if(saved&&/^\d{4}-\d{2}-\d{2}$/.test(saved.startDate)&&/^\d{2}:\d{2}$/.test(saved.time)&&Array.isArray(saved.captions)&&saved.captions.length===7&&saved.captions.every(c=>typeof c==='string'))plan=saved}catch(e){}
  const pad=n=>String(n).padStart(2,'0');
  function tomorrowSast(){const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const get=k=>Number(parts.find(p=>p.type===k).value);const d=new Date(Date.UTC(get('year'),get('month')-1,get('day')+1));return d.toISOString().slice(0,10)}
  if(!plan)plan={startDate:tomorrowSast(),time:'09:00',captions:[...ideas]};
