@@ -93,10 +93,10 @@
   <section class="page" id="page-platforms">
     <div class="page-intro"><div><h2>Your platforms</h2><p>We've kept the workspace focused on your three chosen platforms.</p></div></div>
     <section class="panel"><div class="panel-head"><h3>Selected social platforms</h3><span class="pill ready">3 active in planner</span></div><div class="platforms">
-      <div class="platform"><div class="platform-logo fb">f</div><div><b>Facebook</b><small>Content planning enabled</small></div></div>
+      <div class="platform"><div class="platform-logo fb">f</div><div><b>Facebook</b><small id="facebook-connection-status">Checking Facebook connection…</small></div></div>
       <div class="platform"><div class="platform-logo ig">◎</div><div><b>Instagram</b><small>Content planning enabled</small></div></div>
       <div class="platform"><div class="platform-logo th">@</div><div><b>Threads</b><small>Content planning enabled</small></div></div>
-    </div><div class="notice"><strong>About account connections</strong><br>This starter version is not connected to Meta. Direct account connection and automatic publishing need a secure backend, official Meta app setup, and permissions. We can investigate those later without paying for an app builder.</div></section>
+    </div><div class="notice"><strong>About account connections</strong><br><span id="platform-connection-note">Checking your secure Cloudflare connection…</span></div></section>
   </section>
   <div class="footer">Rene Social Hub · Made for calmer, more organised content planning</div>
 </main>
@@ -133,6 +133,28 @@ function fallbackCopy(t){const ta=document.createElement('textarea');ta.value=t;
 $('post-form').addEventListener('submit',e=>{e.preventDefault();const oldId=$('post-id').value;const item={id:oldId||String(Date.now())+'-'+Math.random().toString(36).slice(2,7),title:$('post-title').value.trim(),caption:$('post-caption').value.trim(),platform:$('post-platform').value,status:$('post-status').value,date:$('post-date').value,updatedAt:new Date().toISOString()};if(!item.title||!item.caption)return;const index=posts.findIndex(p=>p.id===oldId);if(index>=0)posts[index]=item;else posts.push(item);save();resetForm();alert('Post saved in this browser.');});
 $('clear-form').addEventListener('click',resetForm);$('library-filter').addEventListener('change',()=>renderPosts('library-list'));$('prev-month').addEventListener('click',()=>{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()-1,1);renderCalendar()});$('next-month').addEventListener('click',()=>{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+1,1);renderCalendar()});
 render();
+})();
+</script>
+<script>
+(function(){
+  const status=document.getElementById('facebook-connection-status');
+  const note=document.getElementById('platform-connection-note');
+  if(!status||!note)return;
+  fetch('https://rene-social-hub-api-test.renevaservices.workers.dev/api/platforms/status',{cache:'no-store'})
+    .then(r=>{if(!r.ok)throw new Error('Unavailable');return r.json()})
+    .then(data=>{
+      if(data.facebook?.connectionSaved){
+        status.textContent='Facebook Page saved · Publishing off';
+        note.textContent='Your Facebook Page connection is saved securely in Cloudflare. Token permissions have not yet been verified, and automatic publishing is off. Instagram and Threads remain in planning mode.';
+      }else{
+        status.textContent='Planning enabled · Not connected';
+        note.textContent='No Facebook Page connection is saved in Cloudflare. Instagram and Threads are currently planning-only.';
+      }
+    })
+    .catch(()=>{
+      status.textContent='Planning enabled · Status unavailable';
+      note.textContent='Could not check the live connection. Your saved content is unaffected; try refreshing later.';
+    });
 })();
 </script>
 </body>
