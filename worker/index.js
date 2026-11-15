@@ -197,7 +197,7 @@ Return ONLY a JSON array of seven strings, no markdown or explanation.`;
     max_tokens: 1450, temperature: 0.8
   });
   const raw = typeof result?.response === 'string' ? result.response.trim() : '';
-  const clean = raw.replace(/^\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`$/,'');
+  const clean = raw.replace(/^\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`$/,'');
   let captions;
   try { captions = JSON.parse(clean); } catch { throw new Error('AI response was not valid JSON'); }
   if (!Array.isArray(captions) || captions.length !== 7 ||
