@@ -290,12 +290,12 @@ export default {
       const result = await env.DB.prepare(
         "SELECT COUNT(*) AS total FROM scheduled_posts WHERE status = 'scheduled' AND scheduled_at <= ?"
       ).bind(new Date(event.scheduledTime).toISOString()).first();
-      console.log('Rene Social Hub scheduled check', { duePosts: result.total, publishingEnabled: false });
+      console.log('Rene Social Hub scheduled check', { duePosts: result.total, publishingEnabled: env.AUTO_WEEKLY_FACEBOOK_ENABLED === 'true' });
       if (env.AUTO_WEEKLY_FACEBOOK_ENABLED !== 'true') return;
       const prepared = await prepareNextFacebookWeek(env.DB, event.scheduledTime);
       console.log('Weekly Facebook planning', prepared);
       const due = await env.DB.prepare(
-        "SELECT id FROM scheduled_posts WHERE platform = 'facebook' AND status = 'scheduled' AND id LIKE 'rene-auto-week-%' AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 7"
+        "SELECT id FROM scheduled_posts WHERE platform = 'facebook' AND status = 'scheduled' AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 7"
       ).bind(new Date(event.scheduledTime).toISOString()).all();
       for (const post of due.results || []) {
         const outcome = await publishScheduledFacebookPost({
