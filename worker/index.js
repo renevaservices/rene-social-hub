@@ -129,6 +129,36 @@ async function checkFacebookPublisher(request, env) {
   return json({ publishingEnabled: false, facebookConnected: Boolean(await env.DB.prepare('SELECT id FROM facebook_connections LIMIT 1').first()), latestPost: row ?? null, mode: 'dry-run' });
 }
 
+
+// Secure seven-day scheduling endpoint. Requires a server-side owner session or
+// the existing admin bearer key. Never put ADMIN_SETUP_KEY into browser code.
+async function scheduleSevenDays(request, env) {
+  if (!setupAuthorized(request, env)) return json({ error: 'Owner authentication required' }, 401);
+  let payload;
+  try { payload = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { startDate, time, captions } = payload || {};
+  if (typeof startDate !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate) ||
+      typeof time !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time) ||
+      !Array.isArray(captions) || captions.length !== 7 ||
+      !captions.every(c => typeof c === 'string' && c.trim().length > 0 && c.length <= 5000)) {
+    return json({ error: 'Provide a valid start date, SAST time and seven captions (1–5000 characters each)' }, 400);
+  }
+  const [y,m,d] = startDate.split('-').map(Number);
+  const [hour,minute] = time.split(':').map(Number);
+  const first = Date.UTC(y,m-1,d,hour-2,minute);
+  const dateCheck = new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10);
+  if (dateCheck !== startDate || first < Date.now() + 5*60*1000 || first > Date.now()+365*86400000) {
+    return json({ error: 'Choose a real date at least five minutes ahead and within one year' }, 400);
+  }
+  const idPrefix = 'rene-owner-week-' + startDate + '-' + time.replace(':','');
+  const statements = captions.map((caption,i) => env.DB.prepare(
+    "INSERT INTO scheduled_posts(id,content,platform,scheduled_at,status) VALUES(?,?,'facebook',?,'scheduled') ON CONFLICT(id) DO NOTHING"
+  ).bind(idPrefix+'-'+(i+1),caption.trim(),new Date(first+i*86400000).toISOString()));
+  const results = await env.DB.batch(statements);
+  const created = results.reduce((sum,result)=>sum+(result.meta?.changes || 0),0);
+  return json({ ok: true, created, alreadyExists: 7-created, scheduledDates: captions.map((_,i)=>new Date(first+i*86400000).toISOString()), note: 'Existing scheduled posts are never overwritten.' }, created === 7 ? 201 : 200);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -195,6 +225,11 @@ export default {
       } catch (error) {
         return new Response(JSON.stringify({ tokenValid: false, publishScopeGranted: false, verificationCompleted: false, publishingEnabled: false, note: 'Verification unavailable; no post was sent.' }), { status: 503, headers });
       }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/schedule/facebook/week') {
+      try { return await scheduleSevenDays(request, env); }
+      catch (error) { console.error('Seven-day scheduling failed'); return json({ error: 'Scheduling unavailable; no confirmation issued' }, 503); }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/publishing/facebook/check') {
