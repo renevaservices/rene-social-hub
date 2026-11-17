@@ -185,7 +185,7 @@ async function sha256Hex(value) {
   return Array.from(digest,b=>b.toString(16).padStart(2,'0')).join('');
 }
 async function signSession(payload,env) {
-  const key=await crypto.subtle.importKey('raw',hexToBytes(env.FACEBOOK_TOKEN_ENCRYPTION_KEY),'HMAC',false,['sign']);
+  const key=await crypto.subtle.importKey('raw',hexToBytes(env.ADMIN_PASSWORD_HASH),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const sig=new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('rene-admin-v1:'+payload)));
   return Array.from(sig,b=>b.toString(16).padStart(2,'0')).join('');
 }
