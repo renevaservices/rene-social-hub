@@ -448,7 +448,8 @@ export default {
         const response=await beginInstagramConnection(new Request(request.url,{method:'POST',headers:{Authorization:'Bearer '+env.ADMIN_SETUP_KEY}}),env);
         const result=await response.json();
         if(!response.ok || !result.authorizationUrl)return html('Instagram connection could not start.',503);
-        return Response.redirect(result.authorizationUrl,303);
+        const safeUrl = result.authorizationUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Instagram — Rene Social Hub</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:540px;margin:12vh auto;padding:24px"><h1>Continue to Meta</h1><p>Your secure connection request is ready. Select the link below to open Meta's authorization screen.</p><p><a href="${safeUrl}" rel="noreferrer" style="display:inline-block;padding:12px 18px;background:#e8c45b;color:#071b36;border-radius:6px">Continue to Meta</a></p><p>Do not approve permissions until you have checked them.</p></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});
       } catch { return html('Instagram connection could not start.',503); }
     }
 
