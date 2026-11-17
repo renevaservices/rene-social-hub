@@ -208,10 +208,14 @@ async function adminLogin(request,env) {
   const now=Date.now();
   const attempt=await env.DB.prepare('SELECT failed_count,window_start,blocked_until FROM admin_login_attempts WHERE ip_hash=?').bind(ipHash).first();
   if(attempt?.blocked_until>now)return loginHtml('Too many attempts. Please try again in 15 minutes.');
-  const form=await request.formData();
+  let form;
+  try { form=await request.formData(); }
+  catch { return html('Login request could not be read (form).',400); }
   const password=form.get('password');
   if(typeof password!=='string' || password.length>256)return loginHtml('Invalid password.');
-  const valid=safeEqual(await sha256Hex(password),env.ADMIN_PASSWORD_HASH.toLowerCase());
+  let valid;
+  try { valid=safeEqual(await sha256Hex(password),env.ADMIN_PASSWORD_HASH.toLowerCase()); }
+  catch { return html('Password verification is unavailable (hash).',503); }
   if(!valid) {
     const within=attempt && now-attempt.window_start<15*60*1000;
     const count=within?attempt.failed_count+1:1;
@@ -222,7 +226,9 @@ async function adminLogin(request,env) {
   await env.DB.prepare('DELETE FROM admin_login_attempts WHERE ip_hash=?').bind(ipHash).run();
   const expiry=String(now+30*60*1000),nonce=crypto.randomUUID();
   const payload=expiry+'.'+nonce;
-  const token=payload+'.'+await signSession(payload,env);
+  let token;
+  try { token=payload+'.'+await signSession(payload,env); }
+  catch { return html('Session signing is unavailable (session).',503); }
   return new Response(null,{status:303,headers:{Location:LOGIN_HOME,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
 }
 function adminHome() {
