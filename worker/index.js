@@ -165,7 +165,15 @@ function loginHtml(message = '') {
   return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub — Owner Login</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:420px;margin:12vh auto;padding:24px"><h1>Rene Social Hub</h1><p>Private owner login</p><p role="alert">${safe}</p><form method="post" action="/admin/login"><label for="password">Password</label><p><input id="password" type="password" name="password" autocomplete="current-password" required minlength="12" style="width:100%;padding:12px;box-sizing:border-box"></p><button style="padding:12px 22px;background:#e8c45b;color:#071b36;border:0;border-radius:6px">Sign in</button></form></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 }
 function sameOrigin(request) {
-  return request.headers.get('Origin') === new URL(request.url).origin;
+  const expected = new URL(request.url).origin;
+  const origin = request.headers.get('Origin');
+  if (origin && origin !== 'null') return origin === expected;
+  const referer = request.headers.get('Referer');
+  if (referer) {
+    try { return new URL(referer).origin === expected; }
+    catch { return false; }
+  }
+  return request.headers.get('Sec-Fetch-Site') === 'same-origin';
 }
 function safeEqual(a,b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
