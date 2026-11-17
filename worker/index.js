@@ -187,7 +187,7 @@ async function hasAdminSession(request,env) {
     const token=cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith(SESSION_COOKIE+'='))?.slice(SESSION_COOKIE.length+1);
     if(!token)return false;
     const [expiry,nonce,signature,...rest]=token.split('.');
-    if(rest.length || !/^\\d{13}$/.test(expiry) || !/^[0-9a-f-]{36}$/i.test(nonce) || !/^[0-9a-f]{64}$/.test(signature))return false;
+    if(rest.length || !/^[0-9]{13}$/.test(expiry) || !/^[0-9a-f-]{36}$/i.test(nonce) || !/^[0-9a-f]{64}$/.test(signature))return false;
     if(Number(expiry)<Date.now() || Number(expiry)>Date.now()+31*60*1000)return false;
     return safeEqual(signature,await signSession(expiry+'.'+nonce,env));
   } catch { return false; }
