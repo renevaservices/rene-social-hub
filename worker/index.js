@@ -154,6 +154,67 @@ async function checkInstagramReadiness(request, env) {
   });
 }
 
+
+const INSTAGRAM_CALLBACK_URL = `${BASE_URL}/api/oauth/callback/instagram`;
+const INSTAGRAM_LOGIN_CONFIG_ID = '1416447423555854';
+
+async function beginInstagramConnection(request, env) {
+  if (!setupAuthorized(request, env)) return json({ error: 'Owner authentication required' }, 401);
+  if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET || !env.FACEBOOK_TOKEN_ENCRYPTION_KEY)
+    return json({ error: 'Meta credentials are not configured' }, 503);
+  const state = crypto.randomUUID() + crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO instagram_oauth_states(state,created_at) VALUES(?,?)').bind(state, Date.now()).run();
+  const params = new URLSearchParams({
+    client_id: env.FACEBOOK_APP_ID, redirect_uri: INSTAGRAM_CALLBACK_URL,
+    config_id: INSTAGRAM_LOGIN_CONFIG_ID, response_type: 'code',
+    override_default_response_type: 'true', state
+  });
+  return json({ authorizationUrl: `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params}` });
+}
+
+async function finishInstagramConnection(url, env) {
+  if (url.searchParams.has('error')) return html('Instagram authorization was cancelled. Nothing was changed.', 400);
+  const state = url.searchParams.get('state');
+  const code = url.searchParams.get('code');
+  if (!state || !code || !/^[0-9a-f-]{72,73}$/i.test(state))
+    return html('Invalid Instagram authorization response.', 400);
+  const used = await env.DB.prepare('DELETE FROM instagram_oauth_states WHERE state = ? AND created_at >= ? RETURNING state')
+    .bind(state, Date.now() - 10 * 60 * 1000).first();
+  if (!used) return html('Instagram authorization expired or has already been used.', 400);
+  try {
+    const tokenUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`);
+    tokenUrl.search = new URLSearchParams({
+      client_id: env.FACEBOOK_APP_ID, client_secret: env.FACEBOOK_APP_SECRET,
+      redirect_uri: INSTAGRAM_CALLBACK_URL, code
+    }).toString();
+    const tokenResponse = await fetch(tokenUrl, { headers: { 'Cache-Control': 'no-store' } });
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token)
+      return html('Meta did not grant Instagram access. No connection was saved.', 400);
+
+    const pagesUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/me/accounts`);
+    pagesUrl.searchParams.set('fields', 'id,name,access_token,instagram_business_account{id,username}');
+    const pagesResponse = await fetch(pagesUrl, { headers: { Authorization: `Bearer ${tokenData.access_token}`, 'Cache-Control': 'no-store' } });
+    const pagesData = await pagesResponse.json();
+    if (!pagesResponse.ok || !Array.isArray(pagesData.data))
+      return html('Meta did not return the connected Facebook Pages.', 400);
+    const expectedPage = await env.DB.prepare('SELECT page_id FROM facebook_connections LIMIT 1').first();
+    const matches = pagesData.data.filter(p => p.id === expectedPage?.page_id && p.access_token && p.instagram_business_account?.id);
+    if (matches.length !== 1) return html('No matching Instagram professional account was found for the connected Facebook Page. Nothing was saved.', 409);
+    const page = matches[0];
+    const ig = page.instagram_business_account;
+    const encrypted = await encryptToken(page.access_token, env.FACEBOOK_TOKEN_ENCRYPTION_KEY);
+    await env.DB.prepare(`INSERT INTO instagram_connections(instagram_account_id,username,page_id,encrypted_access_token,updated_at)
+      VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(instagram_account_id) DO UPDATE SET
+      username=excluded.username,page_id=excluded.page_id,encrypted_access_token=excluded.encrypted_access_token,updated_at=CURRENT_TIMESTAMP`)
+      .bind(ig.id, ig.username || null, page.id, encrypted).run();
+    return html('Instagram account securely connected. Automatic Instagram publishing is not enabled yet.');
+  } catch {
+    console.error('Instagram authorization could not be completed');
+    return html('Instagram connection could not be completed. Nothing was published.', 500);
+  }
+}
+
 async function checkFacebookPublisher(request, env) {
   if (!setupAuthorized(request, env)) return json({ error: 'Unauthorized' }, 401);
   const row = await env.DB.prepare("SELECT id, platform, status, scheduled_at FROM scheduled_posts WHERE platform = 'facebook' ORDER BY created_at DESC LIMIT 1").first();
@@ -287,6 +348,15 @@ export default {
     if (request.method === 'GET' && url.pathname === '/api/oauth/callback/facebook') {
       try { return await finishFacebookConnection(url, env); }
       catch (error) { console.error('Facebook callback failed'); return html('Facebook connection could not be completed.', 500); }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/oauth/start/instagram') {
+      try { return await beginInstagramConnection(request, env); }
+      catch { return json({ error: 'Instagram authorization could not start' }, 500); }
+    }
+    if (request.method === 'GET' && url.pathname === '/api/oauth/callback/instagram') {
+      try { return await finishInstagramConnection(url, env); }
+      catch { return html('Instagram authorization failed safely.', 500); }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/platforms/instagram/readiness') {
