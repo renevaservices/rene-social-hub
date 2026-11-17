@@ -427,7 +427,7 @@ export default {
     if (request.method === 'GET' && url.pathname === '/admin/login') return loginHtml();
     if (request.method === 'POST' && url.pathname === '/admin/login') {
       try { return await adminLogin(request,env); }
-      catch { return html('Login is temporarily unavailable.',503); }
+      catch (error) { console.error('Admin login failure', error?.name || 'unknown'); return html('Login is temporarily unavailable (' + (error?.name === 'TypeError' ? 'request' : error?.name === 'D1_ERROR' ? 'database' : 'server') + ').',503); }
     }
     if (request.method === 'GET' && url.pathname === '/admin') {
       return (await hasAdminSession(request,env)) ? adminHome() : Response.redirect(BASE_URL+'/admin/login',303);
