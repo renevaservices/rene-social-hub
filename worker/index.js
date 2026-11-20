@@ -1,3 +1,4 @@
+import {reviewTest,publishTest} from './instagram-test-publish.js';
 import { uploadScript } from './instagram-upload.js';
 import { inspectInstagram, instagramToolsPage, reportPage, uploadInstagramImage, serveInstagramImage } from './instagram-tools.js';
 import { publishScheduledFacebookPost } from './facebook-publisher.js';
@@ -414,6 +415,11 @@ export default {
     if (url.pathname === '/admin/instagram' || url.pathname.startsWith('/admin/instagram/')) {
       if (!await hasAdminSession(request,env)) return Response.redirect(BASE_URL+'/admin/login',303);
       try {
+        if (request.method==='GET' && url.pathname==='/admin/instagram/review') return await reviewTest(env,url.searchParams.get('image'));
+        if (request.method==='POST' && url.pathname==='/admin/instagram/publish-test') {
+          if(!sameOrigin(request))return html('Invalid request origin.',403);
+          return await publishTest(request,env,decryptToken);
+        }
         if (request.method==='GET' && url.pathname==='/admin/instagram/upload.js') return new Response(uploadScript,{headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
         if (request.method==='GET' && url.pathname==='/admin/instagram') return await instagramToolsPage(env,url.searchParams.get('uploaded')||'');
         if (request.method==='GET' && url.pathname==='/admin/instagram/check') return reportPage(await inspectInstagram(env,decryptToken));
