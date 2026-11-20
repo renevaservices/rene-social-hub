@@ -1,0 +1,1 @@
+{"name":"rene-social-hub-worker","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.js"},"devDependencies":{"miniflare":"^4.0.0"}}
