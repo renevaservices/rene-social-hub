@@ -32,11 +32,11 @@ test('private image upload requires owner session, enforces origin and serves on
   await db.exec((await readFile('migrations/0001_instagram_media.sql','utf8')).replace(/\n/g,' '));
   let r=await mf.dispatchFetch('https://hub.test/admin/instagram',{redirect:'manual'});assert.equal(r.status,303);
   r=await mf.dispatchFetch('https://hub.test/admin/login',{method:'POST',headers:{Origin:'https://hub.test'},body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,303);const cookie=r.headers.get('set-cookie').split(';')[0];
-  r=await mf.dispatchFetch('https://hub.test/admin/instagram',{headers:{Cookie:cookie}});assert.equal(r.status,200);assert.match(await r.text(),/does not publish/);
+  r=await mf.dispatchFetch('https://hub.test/admin/instagram',{headers:{Cookie:cookie}});assert.equal(r.status,200);const page=await r.text();assert.match(page,/does not publish/);assert.match(page,/instagram-image-form/);assert.match(page,/upload.js/);
   const jpeg=new Uint8Array([255,216,255,192,0,17,8,4,56,4,56,3,1,17,0,2,17,0,3,17,0,255,217]);
   assert.deepEqual(jpegDimensions(jpeg),{width:1080,height:1080});
   assert.equal(jpegDimensions(new Uint8Array([1,2,3])),null);
-  const form=()=>{const f=new FormData();f.set('image',new Blob([jpeg],{type:'image/jpeg'}),'artwork.jpg');return f;};
+  const form=()=>{const f=new FormData();f.set('image',new Blob([jpeg],{type:'application/octet-stream'}),'artwork.jpg');return f;};
   const upload=async(headers)=>{const req=new Request('https://hub.test/admin/instagram/images',{method:'POST',body:form()});return mf.dispatchFetch(req.url,{method:'POST',headers:{'Content-Type':req.headers.get('content-type'),...headers},body:new Uint8Array(await req.arrayBuffer()),redirect:'manual'});};
   r=await upload({Origin:'https://evil.test',Cookie:cookie});assert.equal(r.status,403);
   r=await upload({Origin:'https://hub.test'});assert.equal(r.status,303);assert.match(r.headers.get('location'),/admin\/login/);
@@ -47,4 +47,16 @@ test('private image upload requires owner session, enforces origin and serves on
   await db.prepare('UPDATE instagram_media_assets SET expires_at=0 WHERE id=?').bind(id).run();
   assert.equal((await mf.dispatchFetch('https://hub.test/instagram-media/'+id+'.jpg')).status,404);
  }finally{await mf.dispose();}
+});
+
+test('browser upload converts a saved PNG to JPEG before sending it',async()=>{
+ const {uploadScript}=await import('../worker/instagram-upload.js');const {runInNewContext}=await import('node:vm');
+ let submit,submitted,drawn=false;const button={disabled:false},status={textContent:''},location={href:''};
+ const png=new Blob([new Uint8Array([137,80,78,71])],{type:'image/png'});
+ const form={addEventListener:(name,fn)=>{submit=fn;},querySelector:()=>button};
+ const canvas={getContext:()=>({fillRect(){},drawImage(){drawn=true;}}),toBlob:callback=>callback(new Blob(['jpeg-fixture'],{type:'image/jpeg'}))};
+ const document={querySelector:selector=>selector==='#instagram-image-form'?form:selector==='#image'?{files:[png]}:status,createElement:()=>canvas};
+ runInNewContext(uploadScript,{document,location,FormData,Promise,Error,createImageBitmap:async()=>({width:1254,height:1254,close(){}}),fetch:async(path,options)=>{submitted={path,options};return {redirected:true,url:'https://hub.test/admin/instagram?uploaded=fixture'};}});
+ await submit({preventDefault(){}});
+ assert.equal(drawn,true);assert.equal(submitted.path,'/admin/instagram/images');assert.equal(submitted.options.body.get('image').type,'image/jpeg');assert.match(location.href,/uploaded=fixture/);
 });

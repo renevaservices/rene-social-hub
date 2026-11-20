@@ -13,3 +13,5 @@ JPEG images up to 8 MB can be prepared under `/admin/instagram`. Images are held
 Run `npm install` and `npm test` to verify the readiness checks, owner authorization, CSRF protection, image storage and expiry. Apply `migrations/0001_instagram_media.sql` to the existing Social Hub database before deploying the three Worker modules. Keep existing bindings and the five-minute cron schedule. Do not commit secret values.
 
 Deployment bindings: DB, AI, existing secret bindings and AUTO_WEEKLY_FACEBOOK_ENABLED. No Meta app settings or authorization grants are changed by this update.
+
+The image form now converts PNG, WebP and JPEG source images in the browser to JPEG (maximum source size 20 MB, scaled to at most 1440 pixels per edge). Server validation checks JPEG bytes instead of trusting a phone-supplied MIME label. The image preparation script is an authenticated same-origin resource. Native JPEG multipart uploads still work without JavaScript.
