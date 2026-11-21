@@ -1,3 +1,4 @@
+import {plannerPage,saveDraft,scheduleReview,approveSchedule,cancelSchedule,runInstagramSchedule} from './instagram-schedule.js';
 import {reviewTest,publishTest} from './instagram-test-publish.js';
 import { uploadScript } from './instagram-upload.js';
 import { inspectInstagram, instagramToolsPage, reportPage, uploadInstagramImage, serveInstagramImage } from './instagram-tools.js';
@@ -235,7 +236,7 @@ async function adminLogin(request,env) {
   return new Response(null,{status:303,headers:{Location:LOGIN_HOME,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
 }
 function adminHome() {
-  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram publishing is still disabled.</p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
+  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
 }
 
 const INSTAGRAM_CALLBACK_URL = `${BASE_URL}/api/oauth/callback/instagram`;
@@ -415,6 +416,14 @@ export default {
     if (url.pathname === '/admin/instagram' || url.pathname.startsWith('/admin/instagram/')) {
       if (!await hasAdminSession(request,env)) return Response.redirect(BASE_URL+'/admin/login',303);
       try {
+        if (request.method==='GET' && url.pathname==='/admin/instagram/planner') return await plannerPage(env);
+        if (request.method==='GET' && url.pathname==='/admin/instagram/planner/review') return await scheduleReview(env,url.searchParams.get('id'));
+        if (request.method==='POST' && ['/admin/instagram/planner/draft','/admin/instagram/planner/approve','/admin/instagram/planner/cancel'].includes(url.pathname)) {
+          if(!sameOrigin(request))return html('Invalid request origin.',403);
+          if(url.pathname.endsWith('/draft'))return await saveDraft(request,env);
+          if(url.pathname.endsWith('/approve'))return await approveSchedule(request,env,decryptToken);
+          return await cancelSchedule(request,env);
+        }
         if (request.method==='GET' && url.pathname==='/admin/instagram/review') return await reviewTest(env,url.searchParams.get('image'));
         if (request.method==='POST' && url.pathname==='/admin/instagram/publish-test') {
           if(!sameOrigin(request))return html('Invalid request origin.',403);
@@ -545,6 +554,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    ctx.waitUntil(runInstagramSchedule(env,decryptToken).catch(() => console.error('Instagram schedule check failed (details withheld)')));
     ctx.waitUntil((async () => {
       const result = await env.DB.prepare(
         "SELECT COUNT(*) AS total FROM scheduled_posts WHERE status = 'scheduled' AND scheduled_at <= ?"

@@ -26,9 +26,9 @@ const back='<p><a href="/admin/instagram">Return to Instagram preparation</a></p
 export async function reviewTest(env,id){
  const c=await context(env,id);if(!c)return privatePage('Image needs preparation','<p>Choose an unexpired image with an Instagram feed aspect ratio (4:5 to 1.91:1).</p>'+back,400);
  const job=await env.DB.prepare('SELECT status,media_id FROM instagram_test_posts WHERE id=?').bind(c.key).first();
- let action='<p>This publishes one public Instagram post when you press the button. Automatic Instagram posting stays off.</p><form method="post" action="/admin/instagram/publish-test"><input type="hidden" name="image" value="'+id+'"><button>Publish ONE test post</button></form>';
- if(job?.status==='published')action='<p><strong>This test post was published successfully.</strong> Instagram post ID: '+esc(job.media_id)+'.</p><p>Automatic Instagram posting remains off.</p>';
- else if(job&&job.status!=='container_ready')action='<p>This test is '+esc(job.status)+'. Do not submit another copy. Check your Instagram profile before doing anything further.</p><p>Automatic Instagram posting remains off.</p>';
+ let action='<p>This publishes one public Instagram post when you press the button. This test does not create future schedules.</p><form method="post" action="/admin/instagram/publish-test"><input type="hidden" name="image" value="'+id+'"><button>Publish ONE test post</button></form>';
+ if(job?.status==='published')action='<p><strong>This test post was published successfully.</strong> Instagram post ID: '+esc(job.media_id)+'.</p><p>Use the Instagram planner to review and schedule future posts.</p>';
+ else if(job&&job.status!=='container_ready')action='<p>This test is '+esc(job.status)+'. Do not submit another copy. Check your Instagram profile before doing anything further.</p><p>Use the Instagram planner to review and schedule future posts.</p>';
  else if(job?.status==='container_ready')action='<p>Meta is preparing your image. This button checks preparation and publishes once ready.</p><form method="post" action="/admin/instagram/publish-test"><input type="hidden" name="image" value="'+id+'"><button>Check and publish this test</button></form>';
  return privatePage('Review Instagram test post','<p>Account: <strong>@'+esc(c.account.username)+'</strong></p><img alt="Your prepared post image" src="/instagram-media/'+id+'.jpg"><section style="white-space:pre-wrap">'+esc(CAPTION)+'</section>'+action+back);
 }
