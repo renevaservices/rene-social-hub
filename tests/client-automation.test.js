@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {Miniflare} from 'miniflare';
-import {draftClientPost,approveClientPost,cancelClientPost,clientReview,disconnectClient} from '../worker/client-ui.js';
+import {draftClientPost,approveClientPost,cancelClientPost,clientReview,disconnectClient,clientPage,clientsPage} from '../worker/client-ui.js';
 import {runClientSchedule} from '../worker/client-publisher.js';
 import {startClientConnection,finishClientConnection,confirmClientConnection} from '../worker/client-oauth.js';
 import {THREADS_APP_ID} from '../worker/threads.js';
@@ -38,6 +38,8 @@ const draft=(f,group,targets=[fb,ig,th],asset=imageA,client=A)=>draftClientPost(
 const approve=(f,group,client=A)=>approveClientPost(req({group,approved:'yes'}),f.env,client,async t=>t,f.api,now);
 test('client identity, image and review boundaries are enforced across all three publishing platforms',async()=>{
  const f=await fixture();try{
+  const workspace=await (await clientPage(f.env,A,now)).text();assert.match(workspace,/Business A/);assert.match(workspace,/Meta callback setting/);assert.match(workspace,new RegExp(imageA));assert.doesNotMatch(workspace,new RegExp(imageB));assert.doesNotMatch(workspace,/Page B|other-client|fb-client/);
+  const list=await (await clientsPage(f.env)).text();assert.match(list,/Meta setup before connecting clients/);assert.match(list,/client-instagram/);
   const bad=crypto.randomUUID();assert.equal((await draft(f,bad,[other])).status,400);assert.equal((await draft(f,bad,[fb],imageB)).status,400);
   const group=crypto.randomUUID();assert.equal((await draft(f,group)).status,303);assert.equal((await draft(f,group)).status,303);assert.equal((await f.env.DB.prepare('SELECT COUNT(*) n FROM client_posts').first()).n,3);
   assert.equal((await clientReview(f.env,B,group)).status,404);await cancelClientPost(req({group}),f.env,B,now);assert.equal((await f.env.DB.prepare("SELECT COUNT(*) n FROM client_posts WHERE status='draft'").first()).n,3);
