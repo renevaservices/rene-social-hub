@@ -2,7 +2,7 @@ import {threadsPage,startThreads,finishThreads,confirmThreads,scheduleThreads,ca
 import {plannerPage,saveDraft,scheduleReview,approveSchedule,cancelSchedule,runInstagramSchedule} from './instagram-schedule.js';
 import {reviewTest,publishTest} from './instagram-test-publish.js';
 import { uploadScript } from './instagram-upload.js';
-import { inspectInstagram, instagramToolsPage, reportPage, uploadInstagramImage, serveInstagramImage } from './instagram-tools.js';
+import { privatePage, inspectInstagram, instagramToolsPage, reportPage, uploadInstagramImage, serveInstagramImage } from './instagram-tools.js';
 import { publishScheduledFacebookPost } from './facebook-publisher.js';
 
 
@@ -209,7 +209,19 @@ async function hasAdminSession(request,env) {
     return safeEqual(signature,await signSession(expiry+'.'+nonce,env));
   } catch { return false; }
 }
+async function traceOwnerLogin(env,request,stage) {
+  // Short-lived diagnostic metadata only: never record credentials or cookie values.
+  try {
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM admin_login_events WHERE created_at<?').bind(Date.now()-1800000),
+      env.DB.prepare('DELETE FROM admin_login_events WHERE id NOT IN (SELECT id FROM admin_login_events ORDER BY created_at DESC LIMIT 99)'),
+      env.DB.prepare('INSERT INTO admin_login_events(id,created_at,stage,cookie_present) VALUES(?,?,?,?)').bind(crypto.randomUUID(),Date.now(),stage,(request.headers.get('Cookie')||'').includes(SESSION_COOKIE+'=')?1:0)
+    ]);
+  } catch { /* Diagnostics must never prevent sign-in. */ }
+}
+
 async function adminLogin(request,env) {
+  await traceOwnerLogin(env,request,'login_submit');
   if(!sameOrigin(request))return html('Invalid login request.',403);
   if(!/^[a-f0-9]{64}$/i.test(env.ADMIN_PASSWORD_HASH||''))return html('Owner login is not configured yet.',503);
   const ip=request.headers.get('CF-Connecting-IP')||'unknown';
@@ -233,13 +245,19 @@ async function adminLogin(request,env) {
       .bind(ipHash,count,within?attempt.window_start:now,count>=5?now+15*60*1000:0).run();
     return loginHtml('Incorrect password. Please try again.',next);
   }
+  await traceOwnerLogin(env,request,'password_accepted');
   await env.DB.prepare('DELETE FROM admin_login_attempts WHERE ip_hash=?').bind(ipHash).run();
   const expiry=String(now+30*60*1000),nonce=crypto.randomUUID();
   const payload=expiry+'.'+nonce;
   let token;
   try { token=payload+'.'+await signSession(payload,env); }
   catch { return html('Session signing is unavailable (session).',503); }
-  return new Response(null,{status:303,headers:{Location:'/admin/session?next='+encodeURIComponent(next),'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
+  // Finish on a real first-party document before navigating again. Some browsers
+  // withhold a freshly set Strict cookie across an inherited redirect chain.
+  const label=next==='/admin/threads'?'Continue to Threads':next.startsWith('/admin/instagram')?'Continue to Instagram':'Continue to Admin';
+  const response=privatePage('Signed in','<p>Your password was accepted.</p><p><a style="display:inline-block;padding:14px 20px;background:#e8c45b;color:#071b36;border-radius:7px" href="/admin/session?next='+encodeURIComponent(next)+'">'+label+'</a></p><p>Select Continue to open your private dashboard.</p>');
+  response.headers.set('Set-Cookie',`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`);
+  return response;
 }
 function adminHome() {
   return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
@@ -420,7 +438,8 @@ export default {
       try {return await finishThreads(request,env,encryptToken);} catch {return html('Threads connection could not finish. No post was sent.',503);}
     }
     if (url.pathname==='/admin/threads' || url.pathname.startsWith('/admin/threads/')) {
-      if(!await hasAdminSession(request,env))return Response.redirect(BASE_URL+'/admin/login?next=%2Fadmin%2Fthreads',303);
+      if(!await hasAdminSession(request,env)){await traceOwnerLogin(env,request,'threads_needs_login');return Response.redirect(BASE_URL+'/admin/login?next=%2Fadmin%2Fthreads',303);}
+      await traceOwnerLogin(env,request,'threads_allowed');
       try {
         if(request.method==='GET' && url.pathname==='/admin/threads')return await threadsPage(env);
         if(request.method==='POST') {
@@ -490,10 +509,13 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/admin/session') {
       const next=loginNext(url.searchParams.get('next'));
-      if(!await hasAdminSession(request,env))return loginHtml('Your browser did not keep the sign-in session. Open this page in a normal Safari window with cookies allowed, then sign in again.',next);
+      const sessionValid=await hasAdminSession(request,env);
+      await traceOwnerLogin(env,request,sessionValid?'session_valid':'session_missing');
+      if(!sessionValid)return loginHtml('Your browser did not keep the sign-in session. Open this page in a normal Safari window with cookies allowed, then sign in again.',next);
       return new Response(null,{status:303,headers:{Location:next,'Cache-Control':'no-store'}});
     }
     if (request.method === 'GET' && url.pathname === '/admin/login') {
+      await traceOwnerLogin(env,request,'login_page');
       const next=loginNext(url.searchParams.get('next'));
       if(next!==LOGIN_HOME && await hasAdminSession(request,env))return new Response(null,{status:303,headers:{Location:next,'Cache-Control':'no-store'}});
       return loginHtml('',next);

@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS admin_login_events(id TEXT PRIMARY KEY,created_at INTEGER NOT NULL,stage TEXT NOT NULL,cookie_present INTEGER NOT NULL);

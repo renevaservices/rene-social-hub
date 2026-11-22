@@ -31,7 +31,7 @@ test('private image upload requires owner session, enforces origin and serves on
   await db.exec("CREATE TABLE admin_login_attempts(ip_hash TEXT PRIMARY KEY,failed_count INTEGER,window_start INTEGER,blocked_until INTEGER); CREATE TABLE instagram_connections(instagram_account_id TEXT PRIMARY KEY,username TEXT,page_id TEXT,encrypted_access_token TEXT);");
   await db.exec((await readFile('migrations/0001_instagram_media.sql','utf8')).replace(/\n/g,' '));
   let r=await mf.dispatchFetch('https://hub.test/admin/instagram',{redirect:'manual'});assert.equal(r.status,303);
-  r=await mf.dispatchFetch('https://hub.test/admin/login',{method:'POST',headers:{Origin:'https://hub.test'},body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,303);const cookie=r.headers.get('set-cookie').split(';')[0];
+  r=await mf.dispatchFetch('https://hub.test/admin/login',{method:'POST',headers:{Origin:'https://hub.test'},body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,200);assert.match(await r.clone().text(),/Signed in/);const cookie=r.headers.get('set-cookie').split(';')[0];
   for(const action of ['connect','confirm','schedule','cancel']) {
    const path='https://hub.test/admin/threads/'+action;
    const unauth=await mf.dispatchFetch(path,{method:'POST',headers:{Origin:'https://hub.test'},body:'id=x',redirect:'manual'});assert.equal(unauth.status,303);
