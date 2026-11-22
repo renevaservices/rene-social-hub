@@ -28,7 +28,7 @@ test('Threads OAuth consumes state once and stages encrypted credentials for exp
   const state=(await f.env.DB.prepare('SELECT state FROM threads_oauth_states').first()).state;
   const callback=new Request(THREADS_CALLBACK+'?state='+state+'&code=fixture-code');let encrypts=0;
   const encrypt=async(token,key)=>{assert.equal(token,'long-token');assert.equal(key,'fixture-key');encrypts++;return 'encrypted-fixture';};
-  assert.equal((await finishThreads(callback,f.env,encrypt,f.api,now)).status,303);assert.equal(encrypts,1);
+  const returned=await finishThreads(callback,f.env,encrypt,f.api,now);assert.equal(returned.status,200);assert.equal(returned.headers.get('location'),null);assert.match(await returned.text(),/Continue to confirm Threads account/);assert.equal(encrypts,1);
   assert.equal(await f.env.DB.prepare('SELECT * FROM threads_connections').first(),null);
   const pending=await f.env.DB.prepare('SELECT * FROM threads_pending_connections').first();assert.equal(pending.encrypted_access_token,'encrypted-fixture');
   assert.equal((await finishThreads(callback,f.env,encrypt,f.api,now)).status,400);assert.equal(encrypts,1);

@@ -1,4 +1,4 @@
-import {threadsPage,startThreads,finishThreads,confirmThreads,scheduleThreads,cancelThreads,runThreadsSchedule} from './threads.js';
+import {threadsPage,startThreads,finishThreads,threadsReturnPage,confirmThreads,scheduleThreads,cancelThreads,runThreadsSchedule} from './threads.js';
 import {plannerPage,saveDraft,scheduleReview,approveSchedule,cancelSchedule,runInstagramSchedule} from './instagram-schedule.js';
 import {reviewTest,publishTest} from './instagram-test-publish.js';
 import { uploadScript } from './instagram-upload.js';
@@ -434,6 +434,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (request.method==='GET' && url.pathname==='/api/oauth/threads/continue') return threadsReturnPage();
     if (request.method==='GET' && url.pathname==='/api/oauth/callback/threads') {
       try {return await finishThreads(request,env,encryptToken);} catch {return html('Threads connection could not finish. No post was sent.',503);}
     }

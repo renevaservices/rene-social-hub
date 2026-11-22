@@ -35,6 +35,9 @@ export async function startThreads(env,now=Date.now()){
  const url=new URL('https://www.threads.com/oauth/authorize');url.search=new URLSearchParams({client_id:appId(env),redirect_uri:THREADS_CALLBACK,scope:'threads_basic,threads_content_publish',response_type:'code',state}).toString();
  return privatePage('Continue to Threads','<p>Sign in to the Threads account you want Rene Social Hub to use. This does not publish anything.</p><p><a href="'+esc(url)+'" rel="noreferrer">Continue to Threads authorization</a></p>'+back);
 }
+export function threadsReturnPage() {
+ return privatePage('Return to Rene Social Hub','<p>Continue to your private Threads setup to confirm the account returned by Meta.</p><p><a style="display:inline-block;padding:14px 20px;background:#e8c45b;color:#071b36;border-radius:7px" href="/admin/threads">Continue to confirm Threads account</a></p><p>This step does not publish or schedule anything. If your owner session has expired, you will be asked to sign in.</p>');
+}
 export async function finishThreads(request,env,encrypt,fetchImpl=fetch,now=Date.now()){
  const url=new URL(request.url),state=url.searchParams.get('state'),code=url.searchParams.get('code');
  if(!/^[a-f0-9-]{72}$/.test(state||''))return fail('The Threads connection link is invalid or expired. Start again from the owner page.');
@@ -50,7 +53,7 @@ export async function finishThreads(request,env,encrypt,fetchImpl=fetch,now=Date
   const profile=await verify(env,long.access_token,fetchImpl,null,now);
   const encrypted=await encrypt(long.access_token,env.FACEBOOK_TOKEN_ENCRYPTION_KEY);
   await env.DB.batch([env.DB.prepare('DELETE FROM threads_pending_connections'),env.DB.prepare('INSERT INTO threads_pending_connections(id,account_id,username,encrypted_access_token,expires_at,created_at) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),String(profile.id),profile.username,encrypted,now+Number(long.expires_in)*1000,now)]);
-  return go();
+  return threadsReturnPage();
  }catch{return fail('Threads could not complete the connection. Your existing connection was not changed. Start again from the owner page.');}
 }
 export async function confirmThreads(request,env,now=Date.now()){
