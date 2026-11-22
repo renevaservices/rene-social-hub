@@ -1,3 +1,4 @@
+import {threadsPage,startThreads,finishThreads,confirmThreads,scheduleThreads,cancelThreads,runThreadsSchedule} from './threads.js';
 import {plannerPage,saveDraft,scheduleReview,approveSchedule,cancelSchedule,runInstagramSchedule} from './instagram-schedule.js';
 import {reviewTest,publishTest} from './instagram-test-publish.js';
 import { uploadScript } from './instagram-upload.js';
@@ -236,7 +237,7 @@ async function adminLogin(request,env) {
   return new Response(null,{status:303,headers:{Location:LOGIN_HOME,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
 }
 function adminHome() {
-  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
+  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
 }
 
 const INSTAGRAM_CALLBACK_URL = `${BASE_URL}/api/oauth/callback/instagram`;
@@ -410,6 +411,24 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (request.method==='GET' && url.pathname==='/api/oauth/callback/threads') {
+      try {return await finishThreads(request,env,encryptToken);} catch {return html('Threads connection could not finish. No post was sent.',503);}
+    }
+    if (url.pathname==='/admin/threads' || url.pathname.startsWith('/admin/threads/')) {
+      if(!await hasAdminSession(request,env))return Response.redirect(BASE_URL+'/admin/login',303);
+      try {
+        if(request.method==='GET' && url.pathname==='/admin/threads')return await threadsPage(env);
+        if(request.method==='POST') {
+          if(!sameOrigin(request))return html('Invalid request origin.',403);
+          if(url.pathname==='/admin/threads/connect')return await startThreads(env);
+          if(url.pathname==='/admin/threads/confirm')return await confirmThreads(request,env);
+          if(url.pathname==='/admin/threads/schedule')return await scheduleThreads(request,env,decryptToken);
+          if(url.pathname==='/admin/threads/cancel')return await cancelThreads(request,env);
+        }
+        return html('Not found.',404);
+      }catch{return html('Threads is temporarily unavailable. Check the planner before retrying.',503);}
+    }
+
     if (['GET','HEAD'].includes(request.method) && url.pathname.startsWith('/instagram-media/')) {
       try { return await serveInstagramImage(request,env); } catch { return new Response('Image unavailable',{status:503}); }
     }
@@ -554,6 +573,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    ctx.waitUntil(runThreadsSchedule(env,decryptToken).catch(() => console.error('Threads schedule check failed (details withheld)')));
     ctx.waitUntil(runInstagramSchedule(env,decryptToken).catch(() => console.error('Instagram schedule check failed (details withheld)')));
     ctx.waitUntil((async () => {
       const result = await env.DB.prepare(
