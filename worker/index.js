@@ -165,9 +165,13 @@ const SESSION_COOKIE = 'rene_admin_session';
 const LOGIN_BASE = '/admin/login';
 const LOGIN_HOME = '/admin';
 
-function loginHtml(message = '') {
+function loginNext(value) {
+  return ['/admin/threads','/admin/instagram','/admin/instagram/planner'].includes(value) ? value : LOGIN_HOME;
+}
+
+function loginHtml(message = '', next = LOGIN_HOME) {
   const safe = message.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub — Owner Login</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:420px;margin:12vh auto;padding:24px"><h1>Rene Social Hub</h1><p>Private owner login</p><p role="alert">${safe}</p><form method="post" action="/admin/login"><label for="password">Password</label><p><input id="password" type="password" name="password" autocomplete="current-password" required minlength="12" style="width:100%;padding:12px;box-sizing:border-box"></p><button style="padding:12px 22px;background:#e8c45b;color:#071b36;border:0;border-radius:6px">Sign in</button></form></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub — Owner Login</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:420px;margin:12vh auto;padding:24px"><h1>Rene Social Hub</h1><p>Private owner login</p><p role="alert">${safe}</p><form method="post" action="/admin/login"><input type="hidden" name="next" value="${loginNext(next)}"><label for="password">Password</label><p><input id="password" type="password" name="password" autocomplete="current-password" required minlength="12" style="width:100%;padding:12px;box-sizing:border-box"></p><button style="padding:12px 22px;background:#e8c45b;color:#071b36;border:0;border-radius:6px">Sign in</button></form></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 }
 function sameOrigin(request) {
   const expected = new URL(request.url).origin;
@@ -217,7 +221,8 @@ async function adminLogin(request,env) {
   try { form=await request.formData(); }
   catch { return html('Login request could not be read (form).',400); }
   const password=form.get('password');
-  if(typeof password!=='string' || password.length>256)return loginHtml('Invalid password.');
+  const next=loginNext(form.get('next'));
+  if(typeof password!=='string' || password.length>256)return loginHtml('Invalid password.',next);
   let valid;
   try { valid=safeEqual(await sha256Hex(password),env.ADMIN_PASSWORD_HASH.toLowerCase()); }
   catch { return html('Password verification is unavailable (hash).',503); }
@@ -226,7 +231,7 @@ async function adminLogin(request,env) {
     const count=within?attempt.failed_count+1:1;
     await env.DB.prepare('INSERT INTO admin_login_attempts(ip_hash,failed_count,window_start,blocked_until) VALUES(?,?,?,?) ON CONFLICT(ip_hash) DO UPDATE SET failed_count=excluded.failed_count,window_start=excluded.window_start,blocked_until=excluded.blocked_until')
       .bind(ipHash,count,within?attempt.window_start:now,count>=5?now+15*60*1000:0).run();
-    return loginHtml('Incorrect password. Please try again.');
+    return loginHtml('Incorrect password. Please try again.',next);
   }
   await env.DB.prepare('DELETE FROM admin_login_attempts WHERE ip_hash=?').bind(ipHash).run();
   const expiry=String(now+30*60*1000),nonce=crypto.randomUUID();
@@ -234,7 +239,7 @@ async function adminLogin(request,env) {
   let token;
   try { token=payload+'.'+await signSession(payload,env); }
   catch { return html('Session signing is unavailable (session).',503); }
-  return new Response(null,{status:303,headers:{Location:LOGIN_HOME,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
+  return new Response(null,{status:303,headers:{Location:next,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
 }
 function adminHome() {
   return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
@@ -415,7 +420,7 @@ export default {
       try {return await finishThreads(request,env,encryptToken);} catch {return html('Threads connection could not finish. No post was sent.',503);}
     }
     if (url.pathname==='/admin/threads' || url.pathname.startsWith('/admin/threads/')) {
-      if(!await hasAdminSession(request,env))return Response.redirect(BASE_URL+'/admin/login',303);
+      if(!await hasAdminSession(request,env))return Response.redirect(BASE_URL+'/admin/login?next=%2Fadmin%2Fthreads',303);
       try {
         if(request.method==='GET' && url.pathname==='/admin/threads')return await threadsPage(env);
         if(request.method==='POST') {
@@ -433,7 +438,7 @@ export default {
       try { return await serveInstagramImage(request,env); } catch { return new Response('Image unavailable',{status:503}); }
     }
     if (url.pathname === '/admin/instagram' || url.pathname.startsWith('/admin/instagram/')) {
-      if (!await hasAdminSession(request,env)) return Response.redirect(BASE_URL+'/admin/login',303);
+      if (!await hasAdminSession(request,env)) return Response.redirect(BASE_URL+'/admin/login?next='+encodeURIComponent(loginNext(url.pathname)==='/admin'?'/admin/instagram':loginNext(url.pathname)),303);
       try {
         if (request.method==='GET' && url.pathname==='/admin/instagram/planner') return await plannerPage(env);
         if (request.method==='GET' && url.pathname==='/admin/instagram/planner/review') return await scheduleReview(env,url.searchParams.get('id'));
@@ -483,7 +488,11 @@ export default {
       catch (error) { console.error('Facebook callback failed'); return html('Facebook connection could not be completed.', 500); }
     }
 
-    if (request.method === 'GET' && url.pathname === '/admin/login') return loginHtml();
+    if (request.method === 'GET' && url.pathname === '/admin/login') {
+      const next=loginNext(url.searchParams.get('next'));
+      if(next!==LOGIN_HOME && await hasAdminSession(request,env))return new Response(null,{status:303,headers:{Location:next,'Cache-Control':'no-store'}});
+      return loginHtml('',next);
+    }
     if (request.method === 'POST' && url.pathname === '/admin/login') {
       try { return await adminLogin(request,env); }
       catch (error) { console.error('Admin login failure', error?.name || 'unknown'); return html('Login is temporarily unavailable (' + (error?.name === 'TypeError' ? 'request' : error?.name === 'D1_ERROR' ? 'database' : 'server') + ').',503); }
