@@ -1,3 +1,6 @@
+import {clientsPage,createClient,clientPage,clientReview,uploadClientImage,draftClientPost,approveClientPost,cancelClientPost,disconnectClient,clientUploadScript} from './client-ui.js';
+import {startClientConnection,finishClientConnection,confirmClientConnection} from './client-oauth.js';
+import {runClientSchedule} from './client-publisher.js';
 import {threadsPage,startThreads,finishThreads,threadsReturnPage,confirmThreads,scheduleThreads,cancelThreads,runThreadsSchedule} from './threads.js';
 import {plannerPage,saveDraft,scheduleReview,approveSchedule,cancelSchedule,runInstagramSchedule} from './instagram-schedule.js';
 import {reviewTest,publishTest} from './instagram-test-publish.js';
@@ -166,6 +169,7 @@ const LOGIN_BASE = '/admin/login';
 const LOGIN_HOME = '/admin';
 
 function loginNext(value) {
+  if(typeof value==='string' && /^\/admin\/clients(?:\/[a-f0-9-]{36})?$/.test(value))return value;
   return ['/admin/threads','/admin/instagram','/admin/instagram/planner'].includes(value) ? value : LOGIN_HOME;
 }
 
@@ -254,13 +258,13 @@ async function adminLogin(request,env) {
   catch { return html('Session signing is unavailable (session).',503); }
   // Finish on a real first-party document before navigating again. Some browsers
   // withhold a freshly set Strict cookie across an inherited redirect chain.
-  const label=next==='/admin/threads'?'Continue to Threads':next.startsWith('/admin/instagram')?'Continue to Instagram':'Continue to Admin';
+  const label=next.startsWith('/admin/clients')?'Continue to client automation':next==='/admin/threads'?'Continue to Threads':next.startsWith('/admin/instagram')?'Continue to Instagram':'Continue to Admin';
   const response=privatePage('Signed in','<p>Your password was accepted.</p><p><a style="display:inline-block;padding:14px 20px;background:#e8c45b;color:#071b36;border-radius:7px" href="/admin/session?next='+encodeURIComponent(next)+'">'+label+'</a></p><p>Select Continue to open your private dashboard.</p>');
   response.headers.set('Set-Cookie',`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`);
   return response;
 }
 function adminHome() {
-  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
+  return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/clients">Manage client automation</a></p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
 }
 
 const INSTAGRAM_CALLBACK_URL = `${BASE_URL}/api/oauth/callback/instagram`;
@@ -433,6 +437,35 @@ async function prepareNextFacebookWeek(db, scheduledTime, ai) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    const clientCallback=url.pathname.match(/^\/api\/oauth\/callback\/client-(facebook|instagram|threads)$/);
+    if(request.method==='GET' && clientCallback){
+      try{return await finishClientConnection(request,env,clientCallback[1],encryptToken);}catch{return html('Client authorization could not finish. No post was sent.',503);}
+    }
+    if(url.pathname==='/admin/clients' || url.pathname.startsWith('/admin/clients/')){
+      if(!await hasAdminSession(request,env))return Response.redirect(BASE_URL+'/admin/login?next='+encodeURIComponent(loginNext(url.pathname)==='/admin'?'/admin/clients':loginNext(url.pathname)),303);
+      try{
+        if(request.method==='GET' && url.pathname==='/admin/clients')return await clientsPage(env);
+        if(request.method==='GET' && url.pathname==='/admin/clients/upload.js')return new Response(clientUploadScript,{headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+        if(request.method==='POST' && !sameOrigin(request))return html('Invalid request origin.',403);
+        if(request.method==='POST' && url.pathname==='/admin/clients/create')return await createClient(request,env);
+        const match=url.pathname.match(/^\/admin\/clients\/([a-f0-9-]{36})(?:\/(connect|confirm|images|draft|review|approve|cancel|disconnect))?$/);
+        if(match){const id=match[1],action=match[2];
+          if(request.method==='GET'&&!action)return await clientPage(env,id);
+          if(request.method==='GET'&&action==='review')return await clientReview(env,id,url.searchParams.get('group'));
+          if(request.method==='POST'){
+            if(action==='connect')return await startClientConnection(request,env,id);
+            if(action==='confirm')return await confirmClientConnection(request,env,id);
+            if(action==='images')return await uploadClientImage(request,env,id);
+            if(action==='draft')return await draftClientPost(request,env,id);
+            if(action==='approve')return await approveClientPost(request,env,id,decryptToken);
+            if(action==='cancel')return await cancelClientPost(request,env,id);
+            if(action==='disconnect')return await disconnectClient(request,env,id);
+          }
+        }
+        return html('Not found.',404);
+      }catch{return html('Client automation could not complete this request. Check the client workspace before trying again.',503);}
+    }
 
     if (request.method==='GET' && url.pathname==='/api/oauth/threads/continue') return threadsReturnPage();
     if (request.method==='GET' && url.pathname==='/api/oauth/callback/threads') {
@@ -610,6 +643,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    ctx.waitUntil(runClientSchedule(env,decryptToken).catch(() => console.error('Client schedule check failed (details withheld)')));
     ctx.waitUntil(runThreadsSchedule(env,decryptToken).catch(() => console.error('Threads schedule check failed (details withheld)')));
     ctx.waitUntil(runInstagramSchedule(env,decryptToken).catch(() => console.error('Instagram schedule check failed (details withheld)')));
     ctx.waitUntil((async () => {

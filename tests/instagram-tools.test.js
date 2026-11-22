@@ -32,6 +32,12 @@ test('private image upload requires owner session, enforces origin and serves on
   await db.exec((await readFile('migrations/0001_instagram_media.sql','utf8')).replace(/\n/g,' '));
   let r=await mf.dispatchFetch('https://hub.test/admin/instagram',{redirect:'manual'});assert.equal(r.status,303);
   r=await mf.dispatchFetch('https://hub.test/admin/login',{method:'POST',headers:{Origin:'https://hub.test'},body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,200);assert.match(await r.clone().text(),/Signed in/);const cookie=r.headers.get('set-cookie').split(';')[0];
+  const clientId='11111111-1111-4111-8111-111111111111';
+  for(const action of ['create',clientId+'/connect',clientId+'/confirm',clientId+'/images',clientId+'/draft',clientId+'/approve',clientId+'/cancel',clientId+'/disconnect']) {
+   const path='https://hub.test/admin/clients/'+action;
+   const unauth=await mf.dispatchFetch(path,{method:'POST',headers:{Origin:'https://hub.test'},body:'id=x',redirect:'manual'});assert.equal(unauth.status,303);
+   const csrf=await mf.dispatchFetch(path,{method:'POST',headers:{Cookie:cookie,Origin:'https://evil.test'},body:'id=x',redirect:'manual'});assert.equal(csrf.status,403);
+  }
   for(const action of ['connect','confirm','schedule','cancel']) {
    const path='https://hub.test/admin/threads/'+action;
    const unauth=await mf.dispatchFetch(path,{method:'POST',headers:{Origin:'https://hub.test'},body:'id=x',redirect:'manual'});assert.equal(unauth.status,303);
