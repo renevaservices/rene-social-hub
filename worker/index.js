@@ -171,7 +171,7 @@ function loginNext(value) {
 
 function loginHtml(message = '', next = LOGIN_HOME) {
   const safe = message.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub — Owner Login</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:420px;margin:12vh auto;padding:24px"><h1>Rene Social Hub</h1><p>Private owner login</p><p role="alert">${safe}</p><form method="post" action="/admin/login"><input type="hidden" name="next" value="${loginNext(next)}"><label for="password">Password</label><p><input id="password" type="password" name="password" autocomplete="current-password" required minlength="12" style="width:100%;padding:12px;box-sizing:border-box"></p><button style="padding:12px 22px;background:#e8c45b;color:#071b36;border:0;border-radius:6px">Sign in</button></form></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub — Owner Login</title><body style="font:16px system-ui;background:#071b36;color:#fff;max-width:420px;margin:12vh auto;padding:24px"><h1>Rene Social Hub</h1><p>Private owner login</p><p role="alert">${safe}</p><form method="post" action="/admin/login"><input type="hidden" name="next" value="${loginNext(next)}"><label for="password">Password</label><p><input id="password" type="password" name="password" autocomplete="current-password" required maxlength="256" style="width:100%;padding:12px;box-sizing:border-box"></p><button style="padding:12px 22px;background:#e8c45b;color:#071b36;border:0;border-radius:6px">Sign in</button></form></body></html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 }
 function sameOrigin(request) {
   const expected = new URL(request.url).origin;
@@ -239,7 +239,7 @@ async function adminLogin(request,env) {
   let token;
   try { token=payload+'.'+await signSession(payload,env); }
   catch { return html('Session signing is unavailable (session).',503); }
-  return new Response(null,{status:303,headers:{Location:next,'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
+  return new Response(null,{status:303,headers:{Location:'/admin/session?next='+encodeURIComponent(next),'Set-Cookie':`${SESSION_COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,'Cache-Control':'no-store'}});
 }
 function adminHome() {
   return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rene Social Hub Admin</title><body style="font:16px system-ui;background:#071b36;color:white;max-width:540px;margin:12vh auto;padding:24px"><h1>Rene Social Hub — Admin</h1><p>You are signed in. Instagram test posting is working. Only posts you approve in the Instagram planner are scheduled automatically.</p><p><a style="color:#e8c45b" href="/admin/threads">Connect Threads and review prepared posts</a></p><p><a style="color:#e8c45b" href="/admin/instagram/planner">Open Instagram planner</a></p><p><a style="color:#e8c45b" href="/admin/instagram">Check Instagram readiness and prepare images</a></p><form method="post" action="/admin/connect-instagram"><button style="padding:12px;background:#e8c45b;border:0">Connect Instagram securely</button></form><p><a style="color:#e8c45b" href="/admin/logout">Sign out</a></p></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'X-Content-Type-Options':'nosniff'}});
@@ -488,6 +488,11 @@ export default {
       catch (error) { console.error('Facebook callback failed'); return html('Facebook connection could not be completed.', 500); }
     }
 
+    if (request.method === 'GET' && url.pathname === '/admin/session') {
+      const next=loginNext(url.searchParams.get('next'));
+      if(!await hasAdminSession(request,env))return loginHtml('Your browser did not keep the sign-in session. Open this page in a normal Safari window with cookies allowed, then sign in again.',next);
+      return new Response(null,{status:303,headers:{Location:next,'Cache-Control':'no-store'}});
+    }
     if (request.method === 'GET' && url.pathname === '/admin/login') {
       const next=loginNext(url.searchParams.get('next'));
       if(next!==LOGIN_HOME && await hasAdminSession(request,env))return new Response(null,{status:303,headers:{Location:next,'Cache-Control':'no-store'}});
